@@ -1,0 +1,141 @@
+# dekapu-switch-bot
+
+VRChat の PoseTelemetryHUD(画面左上の白黒ビットグリッド)をスクリーンキャプチャで読み取り、
+視点の 6DoF(グローバル座標 + 向き)を復元し、OSC で移動・視点を操作する VRChat 自動化ツール群。
+
+- グリッド/プロトコルの**確定仕様**: [docs/pose-telemetry-hud-spec.md](docs/pose-telemetry-hud-spec.md)
+  (デコーダはこれに完全準拠。定数変更はオーナー確認が必要)
+- 全体像とモジュール対応: [docs/architecture.md](docs/architecture.md)
+
+## セットアップ
+
+```bash
+uv sync --group dev        # numpy, mss, matplotlib, pillow, pytest
+uv run pytest              # 合成画像でのラウンドトリップ検証(実VRChat不要)
+```
+
+前提(ライブ実行時): Windows で VRChat を**ネイティブ解像度・ウィンドウ表示**で起動し、
+OSC で `/avatar/parameters/HUD_Enable = true`(HUD 表示 ON)にしておくこと。
+ゲーム内メニューを開くと HUD が隠れて読めない(異常ではない)。
+
+## CLI(console scripts)
+
+`uv run <コマンド>` で実行する。実装は [pose_hud/cli/](pose_hud/cli/)。
+
+| コマンド         | 用途                                                       |
+| ---------------- | ---------------------------------------------------------- |
+| `decode-demo`    | HUD を読み取り 6DoF を表示(動作確認・キャリブレーション)   |
+| `map-room`       | 壁沿いに歩いて部屋マップを記録(引数なし・日時フォルダ出力) |
+| `find-button`    | 複数地点からボタンを三角測量                               |
+| `patrol-buttons` | マップ上でボタンを壁を避けて巡回(OSC + PID)                |
+
+### `decode-demo` — 6DoF 表示
+
+```bash
+uv run decode-demo                 # 読み続けて表示(Ctrl+C で停止)
+uv run decode-demo --stats         # fps・成功率などの統計も毎秒表示
+uv run decode-demo --dump out/dbg  # 連続失敗時に直近フレームをダンプ(グリッド未検出の確認)
+```
+
+出力: `pos=( +1.500, -2.250, +42.000)  yaw= +12.34  pitch= -5.67  t=123456`
+(`pos` ワールド座標[m] / `yaw` +Z基準水平角[deg] / `pitch` 上向き正[deg] / `t` 同期時刻)。
+
+`--offset-x/-y` `--block` でグリッド定数を注入できる(キャリブレーション用。既定は確定仕様値)。
+
+### `map-room` — 部屋マップ記録
+
+壁沿いに歩き回った視点軌跡を床平面(XZ)へ投影して間取り図を作る。**歩いた経路そのものが
+部屋の輪郭**になる。引数なし。
+
+```bash
+uv run map-room     # SPACE=一時停止/再開  q(or Ctrl+C)=保存して終了
+```
+
+**一時停止(SPACE)** は「壁伝いに一周できない壁」を撮るための機能。途中に障害物があって
+壁から離れて別の壁区間へ移動する間だけ SPACE で止めれば、その移動が偽の壁として記録されない
+(停止をまたぐ点どうしを線で繋がない=ペンアップ)。区間ごとに歩いて壁全体をカバーできる。
+
+出力 `maps/<YYYYMMDD_HHMMSS>/`: `room.npz`(軌跡・セグメント)/ `room.json`(寸法・面積・
+経路長・区間数)/ `room.png`(間取り図)。
+
+### `find-button` — ボタン座標の三角測量
+
+複数地点から「ボタンを画面中央(視点の正面)に捉えて」SPACE を押すと視線レイを1本記録する。
+位置・角度を変えて2回以上押すと、レイの**最小二乗交点**=ボタン座標を stdout に表示する。
+
+```bash
+uv run find-button      # SPACE=キャプチャ  r=リセット(次のボタン)  q=終了
+```
+
+- 2地点の視線が**平行に近いと精度が出ない**。なるべく別方向から狙う(平行に近いと警告)。
+- 3点あるとより安定。`residual`(各レイからのずれ)が小さいほど良い。
+
+### `patrol-buttons` — 壁を避けてボタン巡回(OSC + PID)
+
+保存した部屋マップを読み込み、指定座標のボタンへ壁を避けて移動する。歩行軌跡マップの内側=
+歩ける床とみなし、行けない所(壁・部屋外)は A* で迂回する。移動・旋回は OSC(`/input/*`)で
+注入し、位置は HUD デコードでフィードバックする。実クリックはまだ行わない(到着して向くまで)。
+
+```bash
+# 計画のみ(VRChat不要)。--dry-run でマップと同じフォルダに plan.png を自動保存
+uv run patrol-buttons --map maps/<日時>/room.npz --target 3.0,1.2,5.0 --target -1.0,1.0,2.0 --dry-run
+
+# 実際に OSC で巡回(VRChat 起動 + HUD_Enable が必要)
+uv run patrol-buttons --map maps/<日時>/room.npz --target 3.0,1.2,5.0 --target -1.0,1.0,2.0
+```
+
+- `--target X,Y,Z` … ボタン座標(複数可, **高さ Y は必須**)。`--buttons JSON` でまとめて指定も可
+- `--radius 0.25` … アバター半径=壁クリアランス[m] / `--cell 0.1` … グリッド解像度[m]
+- `--gap-close 0.3` … 軌跡ループの隙間を塞ぐ距離[m](歩き残しで外に漏れる時に増やす)
+- 追従: `--speed`(巡航速度)、`--arrive`(WP到達半径)、`--face-tol`(正対とみなす角度[deg])、`--settle`
+- PID ゲイン(**移動と正対で別**): 移動=`--nav-turn-kp/ki/kd`、正対=`--turn-kp/ki/kd`・`--pitch-kp/ki/kd`
+- `--turn-knee 0.55` … 視点軸のデッドゾーン補償(下記)。`--fwd-kp/kd` … 前進速度
+
+制御は**連続追従**(経由点で止まらない)+ 経路は**見通しで直線化**(ジグザグ除去)+ 実 dt の
+フィードバック。移動中(nav)は穏やかな yaw ゲイン、到着後(face)は yaw/pitch を `--face-tol` 未満へ収束。
+
+**視点軸のデッドゾーン補償**: VRChat の `/input/LookHorizontal` は `|cmd|<~0.55` でほぼ無反応
+(膝)。素の PID だと最後の数度が膝の直下に張り付いて収束しない。`--turn-knee`(既定0.55)で
+非ゼロ出力を膝以上に押し上げ、無反応域を飛び越えて詰める(移動中は自然なデッドバンドとして
+残すため補償なし)。上下が粘る場合は `--pitch-knee 0.5` も有効。
+
+**制御ログ(既定ON)**: `logs/patrol_<日時>.csv` に毎フレームの姿勢・誤差・PID内訳(P/I/D)・
+OSC指令を書き出す。PID チューニングやぎこちなさの原因調査に使う(`--no-log` で無効、`--log PATH` で保存先指定)。
+
+到着後は yaw(水平)と pitch(上下, `/input/LookVertical`)を PID で合わせてボタンを正面に捉える。
+高さ Y はこの pitch 合わせに使うため必須(`find-button` の座標 x,y,z をそのまま渡せる)。
+
+## ライブラリとして使う
+
+```python
+from pose_hud import PoseReader, RoomMapper, triangulate_poses, NavGrid, plan_path
+from pose_hud.osc import VRChatOSC
+
+# 6DoF 読み取り
+with PoseReader() as reader:                 # 既定で "VRChat" ウィンドウ
+    for pose in reader.poses():
+        print(pose.position, pose.yaw_deg, pose.pitch_deg)
+
+# 経路計画 + OSC 操作
+grid = NavGrid.from_mapper(RoomMapper.load("maps/room.npz"), avatar_radius=0.25)
+path = plan_path(grid, start_xz=(1.0, 1.0), goal_xz=(3.0, 5.0))   # 壁を避けた経由点列
+with VRChatOSC() as osc:                      # 127.0.0.1:9000
+    osc.move(forward=1.0); osc.look(0.2)
+```
+
+非Windows/テストでは `ArrayFrameSource(frame)` を `PoseReader` に注入して実行できる。
+API 一覧とデータフローは [docs/architecture.md](docs/architecture.md) を参照。
+
+## OSC 仕様(VRChat)
+
+送信は [python-osc](https://pypi.org/project/python-osc/) を使い、既定で `127.0.0.1:9000`
+(VRChat 受信、送信は 9001)。`pose_hud.osc.VRChatOSC` が薄いラッパ。
+出典: VRChat OSC 公式ドキュメント(as-input-controller / osc-overview)。
+
+- Axes(float −1..1、離したら0): `/input/Vertical`(+前/−後)、`/input/Horizontal`(+右/−左)、
+  `/input/LookHorizontal`(+右旋回/−左)、`/input/LookVertical`(+上/−下)
+- Buttons(int 0/1): `/input/Jump` ほか / アバター: `/avatar/parameters/HUD_Enable`
+
+## 後続タスク
+
+- ボタンの実クリック(OSC の Use 系操作)。
