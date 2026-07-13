@@ -6,12 +6,6 @@ def _clamp(v: float, lo: float = -1.0, hi: float = 1.0) -> float:
 
 
 class VRChatOSC:
-    """VRChat の移動・視点・アバターパラメータを操作する高レベルラッパ。
-
-    python-osc(SimpleUDPClient)で送信する。VRChat は既定で 127.0.0.1:9000 で受信する。
-    参照: https://docs.vrchat.com/docs/osc-as-input-controller
-    """
-
     def __init__(self, host: str = "127.0.0.1", port: int = 9000):
         self.client = SimpleUDPClient(host, port)
 
@@ -53,7 +47,6 @@ class VRChatOSC:
         self.client.send_message(f"/avatar/parameters/{name}", value)
 
     def hud_enable(self, on: bool = True) -> None:
-        """PoseTelemetryHUD の表示を ON/OFF。"""
         self.avatar_param("HUD_Enable", bool(on))
 
     def close(self) -> None:

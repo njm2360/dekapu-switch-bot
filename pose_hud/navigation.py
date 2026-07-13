@@ -4,6 +4,7 @@ from collections import deque
 from dataclasses import dataclass
 
 import numpy as np
+from scipy.ndimage import binary_dilation, generate_binary_structure, label
 
 from .mapping import Bounds, RoomMapper
 
@@ -12,45 +13,18 @@ def _dilate(mask: np.ndarray, iters: int, connectivity: int = 8) -> np.ndarray:
     """二値マスクを iters 回膨張(ラップなし)。connectivity=4 or 8。"""
     if iters <= 0:
         return mask.copy()
-    out = mask.copy()
-    for _ in range(iters):
-        nb = out.copy()
-        nb[:-1, :] |= out[1:, :]
-        nb[1:, :] |= out[:-1, :]
-        nb[:, :-1] |= out[:, 1:]
-        nb[:, 1:] |= out[:, :-1]
-        if connectivity == 8:
-            nb[:-1, :-1] |= out[1:, 1:]
-            nb[1:, 1:] |= out[:-1, :-1]
-            nb[:-1, 1:] |= out[1:, :-1]
-            nb[1:, :-1] |= out[:-1, 1:]
-        out = nb
-    return out
+    struct = generate_binary_structure(2, 1 if connectivity == 4 else 2)
+    return binary_dilation(mask, structure=struct, iterations=iters)
 
 
 def _flood_from_border(passable: np.ndarray) -> np.ndarray:
     """グリッド外周から passable セルを通って到達できる領域(=外部)を返す(4連結)。"""
-    rows, cols = passable.shape
-    visited = np.zeros_like(passable, dtype=bool)
-    dq: deque[tuple[int, int]] = deque()
-    for r in range(rows):
-        for c in (0, cols - 1):
-            if passable[r, c] and not visited[r, c]:
-                visited[r, c] = True
-                dq.append((r, c))
-    for c in range(cols):
-        for r in (0, rows - 1):
-            if passable[r, c] and not visited[r, c]:
-                visited[r, c] = True
-                dq.append((r, c))
-    while dq:
-        r, c = dq.popleft()
-        for dr, dc in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            nr, nc = r + dr, c + dc
-            if 0 <= nr < rows and 0 <= nc < cols and passable[nr, nc] and not visited[nr, nc]:
-                visited[nr, nc] = True
-                dq.append((nr, nc))
-    return visited
+    lbl, _ = label(passable)  # 4連結の連結成分ラベリング
+    border = (
+        set(lbl[0]) | set(lbl[-1]) | set(lbl[:, 0]) | set(lbl[:, -1])
+    )  # 外周に触れるラベル
+    border.discard(0)  # 0 は非 passable(背景)
+    return np.isin(lbl, list(border))
 
 
 @dataclass
@@ -113,8 +87,8 @@ class NavGrid:
         歩いた跡として障害物に含める(部屋を横切って壁を貫通する経路を防ぐ)。開けた床や
         ドア越しの移動は記録時に SPACE で一時停止して除外する運用が前提。
 
-        1. 軌跡をラスタライズ(=壁)。
-        2. gap_close ぶん膨張して軌跡ループの隙間を塞ぎ(封止)、外周から流して**外側**を判定。
+        1. 軌跡をグリッドに描き込む(=壁)。
+        2. gap_close ぶん膨張して軌跡ループの隙間を塞ぎ、外周から流し込んで**外側**を判定。
         3. 外側と**すべての壁(軌跡)**を avatar_radius ぶん膨張させて塞ぐ(クリアランス確保)。
         4. 残りが歩行可能な床。内壁で仕切られた領域は互いに分断される(実際の壁どおり)。
         """
@@ -195,7 +169,7 @@ def _visible(free: np.ndarray, a: tuple[int, int], b: tuple[int, int]) -> bool:
 
 
 def _los_simplify(free: np.ndarray, cells: list[tuple[int, int]]) -> list[tuple[int, int]]:
-    """見通し(line-of-sight)で経路を間引く(string-pulling)。
+    """壁に遮られない直線で経路を間引く。
 
     A* のジグザグ(対角の階段状)を、壁に当たらない限り直線で結び直し、経由点を最小化する。
     連続追従が滑らかになる。
@@ -203,10 +177,10 @@ def _los_simplify(free: np.ndarray, cells: list[tuple[int, int]]) -> list[tuple[
     if len(cells) <= 2:
         return cells
     out = [cells[0]]
-    anchor = 0
+    anchor = 0  # 現在の直線区間の起点
     i = 1
     while i < len(cells) - 1:
-        # anchor から次の点まで見通せる間は伸ばし、見通せなくなる直前で確定
+        # 起点から次の点まで直線で見通せる間は伸ばし、見通せなくなる直前で確定する
         if not _visible(free, cells[anchor], cells[i + 1]):
             out.append(cells[i])
             anchor = i

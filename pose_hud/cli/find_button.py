@@ -1,26 +1,10 @@
-from pose_hud import PoseReader
+from pose_hud.capture import WindowsVRChatCapture
+from pose_hud.cli._keys import key_events
+from pose_hud.reader import PoseReader
 from pose_hud.triangulate import Sighting, triangulate
 
 
-def _key_events():
-    try:
-        import msvcrt
-
-        while True:
-            ch = msvcrt.getwch()
-            if ch in ("\x00", "\xe0"):
-                msvcrt.getwch()
-                continue
-            yield ch
-    except ImportError:
-        while True:
-            line = input()
-            yield line[:1] if line else " "
-
-
 def main() -> None:
-    from pose_hud.capture import WindowsVRChatCapture
-
     reader = PoseReader(source=WindowsVRChatCapture())
     reader.start()
     sightings: list[Sighting] = []
@@ -28,7 +12,7 @@ def main() -> None:
     print("SPACE=capture  r=reset  q=quit")
 
     try:
-        for ch in _key_events():
+        for ch in key_events():
             if ch in (" ", "\r", "\n"):
                 pose = reader.get_latest()
                 if pose is None or reader.get_stats().consecutive_fail > 5:

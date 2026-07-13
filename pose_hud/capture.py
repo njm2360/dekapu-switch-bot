@@ -3,7 +3,7 @@ from typing import Protocol
 
 import numpy as np
 
-from .spec import DEFAULT_SPEC, GridSpec
+from .spec import CAPTURE_H, CAPTURE_W
 
 
 class FrameSource(Protocol):
@@ -17,7 +17,7 @@ class FrameSource(Protocol):
 
 
 class ArrayFrameSource:
-    """固定 numpy 配列を返すテスト/リプレイ用ソース。差し替え可能。"""
+    """固定の numpy 配列を返す、テスト/再生用のフレーム供給元。"""
 
     def __init__(self, frame: np.ndarray):
         self._frame = frame
@@ -32,6 +32,10 @@ class ArrayFrameSource:
         pass
 
 
+class WindowNotFoundError(RuntimeError):
+    """VRChat ウィンドウが見つからない。"""
+
+
 def _enable_dpi_awareness() -> None:
     """プロセスを Per-Monitor DPI Aware にし、物理ピクセルで矩形を得られるようにする。
 
@@ -39,7 +43,7 @@ def _enable_dpi_awareness() -> None:
     """
     import ctypes
 
-    # Per-Monitor v2 (-4) -> Per-Monitor (2) -> System と順にフォールバック
+    # Per-Monitor v2 (-4) → Per-Monitor (2) → System の順に試す
     try:
         ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
         return
@@ -114,11 +118,11 @@ def _find_window_substring(needle: str):
 class WindowsVRChatCapture:
     """VRChat のクライアント左上付近の小領域を mss で高速キャプチャする FrameSource。
 
-    グリッド(64x24px)を内包する capture_w x capture_h 領域のみを掴むので 60fps を狙える。
+    グリッドを内包する CAPTURE_W x CAPTURE_H 領域のみを掴むので 60fps を狙える。
     ウィンドウ矩形はキャッシュし、掴めなくなったら再解決する。
     """
 
-    def __init__(self, spec: GridSpec = DEFAULT_SPEC, window_title: str = "VRChat"):
+    def __init__(self, window_title: str = "VRChat"):
         if sys.platform != "win32":
             raise RuntimeError(
                 "WindowsVRChatCapture is Windows-only; inject a FrameSource"
@@ -126,7 +130,6 @@ class WindowsVRChatCapture:
         import mss  # 遅延 import(テスト環境に mss/win 依存を持ち込まない)
 
         _enable_dpi_awareness()
-        self.spec = spec
         self.window_title = window_title
         self._sct = mss.mss()
         self._rect: tuple[int, int, int, int] | None = None
@@ -144,8 +147,8 @@ class WindowsVRChatCapture:
         region = {
             "left": left,
             "top": top,
-            "width": min(self.spec.capture_w, cw),
-            "height": min(self.spec.capture_h, ch),
+            "width": min(CAPTURE_W, cw),
+            "height": min(CAPTURE_H, ch),
         }
         try:
             shot = self._sct.grab(region)
@@ -165,7 +168,3 @@ class WindowsVRChatCapture:
             self._sct.close()
         except Exception:
             pass
-
-
-class WindowNotFoundError(RuntimeError):
-    """VRChat ウィンドウが見つからない。"""

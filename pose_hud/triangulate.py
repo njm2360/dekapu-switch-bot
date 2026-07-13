@@ -44,13 +44,11 @@ class Sighting:
 
 @dataclass(frozen=True)
 class TriangulationResult:
-    """最小二乗交点と品質指標。"""
-
     point: tuple[float, float, float]  # 推定ボタン座標 [m]
-    residual_rms: float  # 各レイへの垂直距離のRMS [m](小さいほど良い)
+    residual_rms: float  # 各レイへの垂直距離のRMS [m]
     ray_distances: tuple[float, ...]  # 各レイへの垂直距離 [m]
     n: int  # 使用レイ数
-    max_pair_angle_deg: float  # レイ間の最大なす角 [deg](大きいほど幾何が良い)
+    max_pair_angle_deg: float  # レイ間の最大なす角 [deg]
     condition: float  # 正規方程式の条件数(大きいほど不安定)
     well_conditioned: bool  # 幾何が三角測量に十分か
 
@@ -66,21 +64,12 @@ class TriangulationResult:
         }
 
 
-# 三角測量に十分とみなす最小のレイ間角度 [deg]。これ未満だと視線がほぼ平行で不安定。
 MIN_GEOMETRY_ANGLE_DEG = 5.0
 
 
 def closest_point_to_rays(
     origins: np.ndarray, directions: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
-    """複数レイへの距離二乗和を最小化する点を返す。
-
-    各レイ i: 点 x = o_i + t d_i。点 p からレイ i(直線)への垂直距離二乗の総和
-    Σ ||(I - d_i d_i^T)(p - o_i)||^2 を最小化する p を解く(正規方程式は線形)。
-
-    origins, directions: (N, 3)。directions は内部で正規化する。
-    戻り値: (p (3,), A (3,3))。A は正規方程式の係数行列(条件数評価用)。
-    """
     origins = np.asarray(origins, dtype=np.float64).reshape(-1, 3)
     dirs = np.asarray(directions, dtype=np.float64).reshape(-1, 3)
     if len(origins) < 2:
@@ -99,14 +88,12 @@ def closest_point_to_rays(
 
 
 def _perp_distances(p: np.ndarray, origins: np.ndarray, dirs: np.ndarray) -> np.ndarray:
-    """点 p から各レイ(直線)への垂直距離。"""
     w = p[None, :] - origins  # (N,3)
     proj = np.sum(w * dirs, axis=1, keepdims=True) * dirs
     return np.linalg.norm(w - proj, axis=1)
 
 
 def _max_pair_angle_deg(dirs: np.ndarray) -> float:
-    """レイ方向どうしのなす角の最大値 [deg](符号なし、平行=0)。"""
     d = dirs / np.linalg.norm(dirs, axis=1, keepdims=True)
     cos = np.clip(d @ d.T, -1.0, 1.0)
     ang = np.degrees(np.arccos(np.abs(cos)))  # 0..90
@@ -116,7 +103,6 @@ def _max_pair_angle_deg(dirs: np.ndarray) -> float:
 def triangulate(
     sightings: Sequence[Sighting], min_angle_deg: float = MIN_GEOMETRY_ANGLE_DEG
 ) -> TriangulationResult:
-    """視線レイ群からボタン座標を推定する。2本以上必要。"""
     if len(sightings) < 2:
         raise ValueError("need at least 2 sightings to triangulate")
     origins = np.array([s.origin for s in sightings], dtype=np.float64)

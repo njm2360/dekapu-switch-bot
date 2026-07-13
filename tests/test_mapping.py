@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from pose_hud import Pose, RoomMapper
-from pose_hud.mapping import Bounds
+from pose_hud.decode import Pose
+from pose_hud.mapping import Bounds, RoomMapper
 
 
 def rectangle_path(width=4.0, depth=6.0, step=0.1, x0=1.0, z0=-2.0):
@@ -200,7 +200,7 @@ def test_single_point_grid():
     assert occ.grid.sum() == 1
 
 
-# ---- レンダラ(matplotlib / Pillow があれば) ----------------------------
+# ---- レンダラ(matplotlib) ----------------------------------------------
 def test_render_map_png(tmp_path):
     pytest.importorskip("matplotlib")
     from pose_hud.mapping_render import render_map
@@ -209,15 +209,4 @@ def test_render_map_png(tmp_path):
     for x, z in rectangle_path(4.0, 6.0):
         m.add(x, 1.6, z)
     out = render_map(m, tmp_path / "map", cell=0.1)
-    assert out.exists() and out.stat().st_size > 0
-
-
-def test_save_occupancy_png(tmp_path):
-    pytest.importorskip("PIL")
-    from pose_hud.mapping_render import save_occupancy_png
-
-    m = RoomMapper(min_move=0.0)
-    for x, z in rectangle_path(4.0, 6.0):
-        m.add(x, 1.6, z)
-    out = save_occupancy_png(m, tmp_path / "occ", cell=0.1)
     assert out.exists() and out.stat().st_size > 0

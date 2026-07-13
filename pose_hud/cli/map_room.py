@@ -3,10 +3,11 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from pose_hud import PoseReader, RoomMapper
 from pose_hud.capture import WindowsVRChatCapture
 from pose_hud.cli._keys import key_events
-from pose_hud.mapping_render import save_map
+from pose_hud.mapping import RoomMapper
+from pose_hud.mapping_render import render_map
+from pose_hud.reader import PoseReader
 
 
 def _key_thread(pause_evt: threading.Event, stop_evt: threading.Event) -> None:
@@ -72,10 +73,7 @@ def main() -> None:
         f"(path {s['path_length_m']:.2f} m, {s['points']} pts, {s['segments']} seg)"
     )
     print(f"saved: {npz}  {npz.with_suffix('.json')}")
-    try:
-        print(f"map:   {save_map(mapper, out_dir / 'room')}")
-    except ImportError:
-        print("map PNG skipped (uv sync --extra map)")
+    print(f"map:   {render_map(mapper, out_dir / 'room')}")
 
 
 if __name__ == "__main__":

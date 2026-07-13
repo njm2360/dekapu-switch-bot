@@ -1,11 +1,10 @@
 """RoomMapper: 歩行軌跡から部屋の地図(床平面の間取り)を作る。
 
 壁沿いに歩いた 6DoF ポーズ列を床平面(XZ)へ投影すると、その軌跡自体が部屋の輪郭に
-なる。ここではその軌跡の蓄積・寸法計測・占有グリッドのラスタライズ・保存/読込を扱う。
-描画は mapping_render.py(matplotlib 任意依存)に分離。
+なる。ここではその軌跡の蓄積・寸法計測・占有グリッドへの描き込み・保存/読込を扱う。
+描画は mapping_render.py(matplotlib)に分離。
 
-座標系は CLAUDE.md 準拠(Unity: Y-up, 左手系, 単位メートル)。床平面は水平な XZ、
-Y は高さ。
+座標系は Unity 準拠(Y-up, 左手系, 単位メートル)。床平面は水平な XZ、Y は高さ。
 """
 
 from __future__ import annotations
@@ -49,7 +48,7 @@ class Bounds:
 
 @dataclass
 class OccupancyGrid:
-    """歩いた経路をラスタライズした占有グリッド。"""
+    """歩いた経路をグリッドのセルに描き込んだ占有グリッド。"""
 
     grid: np.ndarray            # (rows=Z, cols=X) bool。True=通過
     cell: float                 # 1セルの辺長 [m]
@@ -190,9 +189,9 @@ class RoomMapper:
 
     # ---- 占有グリッド --------------------------------------------------
     def occupancy_grid(self, cell: float = 0.1, pad: float = 0.5) -> OccupancyGrid:
-        """経路をセル解像度 ``cell`` [m] でラスタライズした占有グリッドを返す。
+        """経路をセル解像度 ``cell`` [m] のグリッドに描き込んだ占有グリッドを返す。
 
-        連続点間を線分としてサンプリングし(ベクトル化)、通過セルを True にする。
+        連続する点の間を線分として等間隔にサンプリングし、通過したセルを True にする。
         """
         b = self.bounds()
         if b is None:

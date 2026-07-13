@@ -6,8 +6,11 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "numpy>=2.1",
+    "scipy>=1.13",
     "mss>=9.0",
     "python-osc>=1.9",
+    "matplotlib>=3.8",
+    "pydirectinput>=1.0.4",
 ]
 
 [project.scripts]
@@ -16,14 +19,8 @@ map-room = "pose_hud.cli.map_room:main"
 find-button = "pose_hud.cli.find_button:main"
 patrol-buttons = "pose_hud.cli.patrol_buttons:main"
 
-[project.optional-dependencies]
-# デバッグダンプの PNG 出力(任意)
-debug = ["pillow>=10.0"]
-# 部屋地図の間取り図レンダリング(任意): map-room / patrol-buttons の PNG 出力
-map = ["matplotlib>=3.8"]
-
 [dependency-groups]
-dev = ["pytest>=8.0", "matplotlib>=3.8", "pillow>=10.0"]
+dev = ["pytest>=8.0"]
 
 [build-system]
 requires = ["hatchling"]

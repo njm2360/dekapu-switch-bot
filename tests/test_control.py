@@ -6,8 +6,9 @@ import math
 
 import pytest
 
-from pose_hud import PID, aim_angle, heading_error, pitch_error, wrap180
+from pose_hud.control import PID, wrap180
 from pose_hud.decode import Pose
+from pose_hud.navigation import aim_angle, heading_error, pitch_error
 
 
 def test_wrap180():
@@ -65,16 +66,16 @@ def test_pid_exposes_term_breakdown():
 
 
 def test_pid_deadzone_compensation():
-    # out_knee>0 なら微小な非ゼロ出力でも最低 knee まで押し上げる(符号保持)
-    pid = PID(kp=0.01, out_knee=0.55)
-    out = pid.update(1.0, 0.1)        # 生出力 0.01 → knee にブースト
+    # out_deadzone>0 なら微小な非ゼロ出力でも最低 out_deadzone まで底上げする(符号保持)
+    pid = PID(kp=0.01, out_deadzone=0.55)
+    out = pid.update(1.0, 0.1)        # 生出力 0.01 → out_deadzone まで底上げ
     assert out == pytest.approx(0.55 + (1 - 0.55) * 0.01, abs=1e-6)
     neg = pid.update(-1.0, 0.1)
     assert neg < 0 and abs(neg) == pytest.approx(0.55 + (1 - 0.55) * 0.01, abs=1e-6)
-    # ちょうど0(誤差0)は0のまま(不感帯)
-    assert PID(kp=0.1, out_knee=0.55).update(0.0, 0.1) == 0.0
+    # ちょうど0(誤差0)は0のまま(底上げしない)
+    assert PID(kp=0.1, out_deadzone=0.55).update(0.0, 0.1) == 0.0
     # 生出力が飽和(1.0)なら 1.0 のまま
-    big = PID(kp=1.0, out_knee=0.55).update(5.0, 0.1)
+    big = PID(kp=1.0, out_deadzone=0.55).update(5.0, 0.1)
     assert big == pytest.approx(1.0)
 
 

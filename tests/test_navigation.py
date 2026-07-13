@@ -7,7 +7,8 @@ import math
 import numpy as np
 import pytest
 
-from pose_hud import NavGrid, RoomMapper, plan_path, steering
+from pose_hud.mapping import RoomMapper
+from pose_hud.navigation import NavGrid, plan_path, steering
 
 
 def _trace(corners, step=0.05):

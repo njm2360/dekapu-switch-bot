@@ -1,6 +1,16 @@
 import numpy as np
 
-from .spec import DEFAULT_SPEC, IDX_CHECKSUM, GridSpec
+from .spec import (
+    BLOCK,
+    CAPTURE_H,
+    CAPTURE_W,
+    COLS,
+    IDX_CHECKSUM,
+    MAGIC,
+    OFFSET_X,
+    OFFSET_Y,
+    ROWS,
+)
 
 
 def pack_pose_words(
@@ -8,11 +18,10 @@ def pack_pose_words(
     position: tuple[float, float, float],
     forward: tuple[float, float, float],
     up: tuple[float, float, float],
-    spec: GridSpec = DEFAULT_SPEC,
 ) -> np.ndarray:
     """6DoF から 12 ワード(uint32)を組み立てる。XORチェックサムも計算する。"""
-    words = np.zeros(spec.rows, dtype=np.uint32)
-    words[0] = spec.magic
+    words = np.zeros(ROWS, dtype=np.uint32)
+    words[0] = MAGIC
     words[1] = np.uint32(time_ms & 0xFFFFFFFF)
     words[2:5] = np.asarray(position, dtype=np.float32).view(np.uint32)
     words[5:8] = np.asarray(forward, dtype=np.float32).view(np.uint32)
@@ -21,15 +30,14 @@ def pack_pose_words(
     return words
 
 
-def words_to_bits(words: np.ndarray, spec: GridSpec = DEFAULT_SPEC) -> np.ndarray:
+def words_to_bits(words: np.ndarray) -> np.ndarray:
     """uint32[rows] を (rows, cols) bool グリッドへ展開する(MSBが左端)。"""
-    shifts = np.arange(spec.cols - 1, -1, -1, dtype=np.uint32)
+    shifts = np.arange(COLS - 1, -1, -1, dtype=np.uint32)
     return ((words[:, None].astype(np.uint32) >> shifts) & np.uint32(1)).astype(bool)
 
 
 def render_grid(
     words: np.ndarray,
-    spec: GridSpec = DEFAULT_SPEC,
     canvas_shape: tuple[int, int] | None = None,
     origin: tuple[int, int] = (0, 0),
     background: int = 0,
@@ -41,15 +49,15 @@ def render_grid(
     クライアント左上位置(通常 (0,0))。白=255, 黒=0。
     """
     if canvas_shape is None:
-        canvas_shape = (spec.capture_h, spec.capture_w)
-    bits = words_to_bits(words, spec)  # (rows, cols)
+        canvas_shape = (CAPTURE_H, CAPTURE_W)
+    bits = words_to_bits(words)  # (rows, cols)
     # ブロック拡大: 各ビットを block x block へ複製
-    block_px = np.kron(bits, np.ones((spec.block, spec.block), dtype=bool))
+    block_px = np.kron(bits, np.ones((BLOCK, BLOCK), dtype=bool))
     gh, gw = block_px.shape  # grid_h, grid_w
 
     canvas = np.full((*canvas_shape, 3), background, dtype=dtype)
     oy, ox = origin
-    y0, x0 = oy + spec.offset_y, ox + spec.offset_x
+    y0, x0 = oy + OFFSET_Y, ox + OFFSET_X
     if y0 + gh > canvas_shape[0] or x0 + gw > canvas_shape[1]:
         raise ValueError("grid does not fit in canvas at given origin")
     canvas[y0 : y0 + gh, x0 : x0 + gw, :] = np.where(block_px[..., None], 255, 0)
@@ -61,9 +69,8 @@ def render_pose(
     position: tuple[float, float, float],
     forward: tuple[float, float, float],
     up: tuple[float, float, float],
-    spec: GridSpec = DEFAULT_SPEC,
     **render_kwargs,
 ) -> np.ndarray:
     """6DoF を直接グリッド画像へエンコードするショートカット。"""
-    words = pack_pose_words(time_ms, position, forward, up, spec)
-    return render_grid(words, spec, **render_kwargs)
+    words = pack_pose_words(time_ms, position, forward, up)
+    return render_grid(words, **render_kwargs)

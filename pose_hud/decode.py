@@ -1,26 +1,27 @@
 import enum
 import math
 from dataclasses import dataclass
-from functools import lru_cache
 
 import numpy as np
 
 from .spec import (
-    DEFAULT_SPEC,
+    BLOCK,
+    COLS,
     IDX_CHECKSUM,
-    IDX_FWD,
     IDX_MAGIC,
-    IDX_POS,
     IDX_TIME,
-    IDX_UP,
-    GridSpec,
+    MAGIC,
+    OFFSET_X,
+    OFFSET_Y,
+    ROWS,
+    THRESHOLD,
 )
 
 
 class DecodeStatus(enum.Enum):
     OK = "ok"
-    MAGIC_MISMATCH = "magic_mismatch"  # HUD非表示 / メニューで隠れている等
-    CHECKSUM_MISMATCH = "checksum_mismatch"  # 読み取りノイズ / 途中フレーム
+    MAGIC_MISMATCH = "magic_mismatch"
+    CHECKSUM_MISMATCH = "checksum_mismatch"
 
 
 @dataclass(frozen=True)
@@ -68,20 +69,14 @@ class DecodeResult:
         return self.status is DecodeStatus.OK
 
 
-@lru_cache(maxsize=8)
-def _sampling_geometry(spec: GridSpec):
-    """ブロック中心座標と MSB-左のパック重みをキャッシュして返す。"""
-    cols = np.arange(spec.cols)
-    rows = np.arange(spec.rows)
-    half = spec.block // 2
-    cx = spec.offset_x + cols * spec.block + half  # (cols,)
-    cy = spec.offset_y + rows * spec.block + half  # (rows,)
-    # MSB が左端 => 列0が最上位ビット
-    weights = np.uint64(1) << np.arange(spec.cols - 1, -1, -1, dtype=np.uint64)
-    return cy, cx, weights
+# ブロック中心座標と MSB-左のパック重み(定数なので一度だけ計算する)。
+_half = BLOCK // 2
+_CX = OFFSET_X + np.arange(COLS) * BLOCK + _half  # (cols,)
+_CY = OFFSET_Y + np.arange(ROWS) * BLOCK + _half  # (rows,)
+_WEIGHTS = np.uint64(1) << np.arange(COLS - 1, -1, -1, dtype=np.uint64)  # 列0が最上位
 
 
-def sample_bits(frame: np.ndarray, spec: GridSpec = DEFAULT_SPEC) -> np.ndarray:
+def sample_bits(frame: np.ndarray) -> np.ndarray:
     """フレームからブロック中心を一括サンプルし (rows, cols) の bool 配列を返す。
 
     frame: HxWx3 以上 (BGR/RGB どちらでも / アルファ付きも可)。
@@ -89,34 +84,32 @@ def sample_bits(frame: np.ndarray, spec: GridSpec = DEFAULT_SPEC) -> np.ndarray:
     """
     if frame.ndim != 3:
         raise ValueError(f"frame must be HxWxC, got shape {frame.shape}")
-    cy, cx, _ = _sampling_geometry(spec)
-    need_h = int(cy[-1]) + 1
-    need_w = int(cx[-1]) + 1
+    need_h = int(_CY[-1]) + 1
+    need_w = int(_CX[-1]) + 1
     if frame.shape[0] < need_h or frame.shape[1] < need_w:
         raise ValueError(
             f"frame {frame.shape[:2]} too small for grid (need >= {need_h}x{need_w})"
         )
-    # (rows, cols, C) を一括ギャザー。C はRGBの先頭3chのみ使用。
-    samples = frame[np.ix_(cy, cx)][:, :, :3].astype(np.uint16)
+    # (rows, cols, C) をまとめて取り出す。C はRGBの先頭3chのみ使用。
+    samples = frame[np.ix_(_CY, _CX)][:, :, :3].astype(np.uint16)
     rgb_sum = samples.sum(axis=2)  # (rows, cols)
-    return rgb_sum > spec.threshold
+    return rgb_sum > THRESHOLD
 
 
-def pack_words(bits: np.ndarray, spec: GridSpec = DEFAULT_SPEC) -> np.ndarray:
+def pack_words(bits: np.ndarray) -> np.ndarray:
     """(rows, cols) bool 配列を uint32[rows] ワードにパックする(MSBが左端)。"""
-    _, _, weights = _sampling_geometry(spec)
-    words = bits.astype(np.uint64) @ weights  # (rows,)
+    words = bits.astype(np.uint64) @ _WEIGHTS  # (rows,)
     return words.astype(np.uint32)
 
 
-def decode_words(frame: np.ndarray, spec: GridSpec = DEFAULT_SPEC) -> np.ndarray:
+def decode_words(frame: np.ndarray) -> np.ndarray:
     """フレームから 12 ワードを復元する(検証なし)。uint32[12]。"""
-    return pack_words(sample_bits(frame, spec), spec)
+    return pack_words(sample_bits(frame))
 
 
-def validate_words(words: np.ndarray, spec: GridSpec = DEFAULT_SPEC) -> DecodeStatus:
+def validate_words(words: np.ndarray) -> DecodeStatus:
     """MAGIC と XOR チェックサムを検証する。"""
-    if int(words[IDX_MAGIC]) != spec.magic:
+    if int(words[IDX_MAGIC]) != MAGIC:
         return DecodeStatus.MAGIC_MISMATCH
     xor = np.bitwise_xor.reduce(words[:IDX_CHECKSUM].astype(np.uint32))
     if np.uint32(xor) != words[IDX_CHECKSUM]:
@@ -135,12 +128,9 @@ def words_to_pose(words: np.ndarray) -> Pose:
     )
 
 
-def decode_pose(frame: np.ndarray, spec: GridSpec = DEFAULT_SPEC) -> DecodeResult:
-    """フレームをデコードし検証まで行う。
-
-    CLAUDE.md のデコード検証手順 3〜4 を実施(手順5の重複フレーム判定は PoseReader 側)。
-    """
-    words = decode_words(frame, spec)
-    status = validate_words(words, spec)
+def decode_pose(frame: np.ndarray) -> DecodeResult:
+    """フレームをデコードし検証まで行う(重複フレーム判定は PoseReader 側)。"""
+    words = decode_words(frame)
+    status = validate_words(words)
     pose = words_to_pose(words) if status is DecodeStatus.OK else None
     return DecodeResult(status=status, words=words, pose=pose)
