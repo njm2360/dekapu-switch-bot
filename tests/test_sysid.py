@@ -6,6 +6,7 @@
 
 import math
 
+import numpy as np
 import pytest
 
 from app.control.controller import (
@@ -19,6 +20,8 @@ from app.sysid.identify import (
     AxisModel,
     PlantModel,
     ProbeRun,
+    ProbeSample,
+    _isotonic,
     build_plant,
     extract_dts,
     identify_axis,
@@ -300,6 +303,89 @@ def test_run_csv_roundtrip(tmp_path):
     m2 = identify_axis(loaded)
     assert m2.points == pytest.approx(m1.points)
     assert m2.deadtime_s == pytest.approx(m1.deadtime_s)
+
+
+def _increments_nonnegative(points) -> bool:
+    xs = [c for c, _ in points]
+    ys = [r for _, r in points]
+    grid = np.linspace(xs[0], xs[-1], 200)
+    interp = np.interp(grid, xs, ys)
+    return bool(np.all(np.diff(interp) >= -1e-9))
+
+
+def test_isotonic_pav_makes_nondecreasing():
+    # 非単調な列を PAV で非減少に均す(隣接違反はプール平均に併合)
+    assert _isotonic([1.0, 3.0, 2.0, 5.0]) == pytest.approx([1.0, 2.5, 2.5, 5.0])
+    out = _isotonic([-90.0, 0.0, 1.2, 82.8, 77.0, 90.0])
+    assert all(out[i + 1] >= out[i] - 1e-9 for i in range(len(out) - 1))
+
+
+def test_load_sanitizes_nonmonotonic_curve(tmp_path):
+    """レガシー JSON の非単調な外れ点も、読込時に単調非減少へ均される。"""
+    plant = make_plant()
+    # yaw に非物理な外れ点(rate(0.705)>rate(0.715))を仕込む
+    plant.axes["yaw"] = AxisModel(
+        "yaw",
+        "deg/s",
+        [
+            (-1.0, -90.0),
+            (0.0, 0.0),
+            (0.55, 1.2),
+            (0.705, 82.8),
+            (0.715, 77.0),
+            (1.0, 90.0),
+        ],
+        0.1,
+    )
+    path = plant.save(tmp_path / "plant.json")
+    loaded = PlantModel.load(path)
+    pts = loaded.axes["yaw"].points
+    ys = [r for _, r in pts]
+    assert all(ys[i + 1] >= ys[i] - 1e-9 for i in range(len(ys) - 1))  # 非減少
+    assert _increments_nonnegative(
+        pts
+    )  # np.interp の増分が非負(負のプラントゲインなし)
+
+
+def test_identified_curve_is_monotonic():
+    """同定した静特性カーブは cmd 全域で非減少(np.interp の傾きが非負)。"""
+    plant = make_plant()
+    sim = SimulatedVRChat(plant)
+    run = probe(
+        sim, "yaw", look_schedule([0.3, 0.5, 0.55, 0.6, 0.8, 1.0], hold=1.0, settle=0.4)
+    )
+    model = identify_axis(run)
+    assert _increments_nonnegative(model.points)
+
+
+def test_deadtime_interpolates_crossing():
+    """しきい値到達時刻をサンプル間で線形補間し、量子化による上振れを避ける。
+
+    既知むだ時間の合成ステップ応答(0→非0 遷移)を1本作り、推定が真値±半フレーム内。
+    """
+    dt = 0.05
+    true_dead = 0.1
+    rate = 30.0  # deg/s(しきい値 0.1deg には即到達=補間の効きを見る)
+    # seg0: cmd=0 の基準サンプル、seg1: cmd=+1 でむだ時間後に一定速度で立ち上がる
+    samples: list[ProbeSample] = []
+    t_send0 = 0.0
+    # 基準(遷移直前)サンプル
+    samples.append(ProbeSample(0, 0.0, 0.0, 0, 0.0, 0.0, 0.0, 0.0, 0.0))
+    t_send1 = dt
+    n = 0
+    for k in range(1, 30):
+        t = t_send1 + k * dt
+        elapsed = max(0.0, t - t_send1 - true_dead)
+        yaw = rate * elapsed  # むだ時間後に線形に回る
+        samples.append(ProbeSample(1, 1.0, t, int(t * 1000), 0.0, 0.0, 0.0, yaw, 0.0))
+        n += 1
+    run = ProbeRun(
+        axis="yaw",
+        samples=samples,
+        seg_starts=[(0, 0.0, t_send0), (1, 1.0, t_send1)],
+    )
+    model = identify_axis(run)
+    assert model.deadtime_s == pytest.approx(true_dead, abs=dt / 2)
 
 
 def test_turn_to_runs_against_sim():

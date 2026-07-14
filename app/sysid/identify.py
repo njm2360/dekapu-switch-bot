@@ -439,6 +439,47 @@ def run_pitch_probe(
 # ---------------------------------------------------------------------------
 
 
+def _isotonic(rates: list[float]) -> list[float]:
+    """PAV(pool-adjacent-violators)で列を非減少に均す(等重み)。"""
+    # 各プールを [値の和, 個数] で持ち、隣接違反(左プール平均 > 右)を都度併合する
+    stack: list[list[float]] = []
+    for r in rates:
+        cur = [r, 1.0]
+        while stack and stack[-1][0] / stack[-1][1] > cur[0] / cur[1]:
+            prev = stack.pop()
+            cur = [prev[0] + cur[0], prev[1] + cur[1]]
+        stack.append(cur)
+    out: list[float] = []
+    for total, count in stack:
+        out.extend([total / count] * int(count))
+    return out
+
+
+def _monotonic_points(
+    points: list[tuple[float, float]], axis: str, source: str
+) -> list[tuple[float, float]]:
+    """静特性(cmd 昇順)の定常速度を cmd 全域で非減少に均す(PAV)。
+
+    rate(−1)<0≤rate(+1) かつ不感帯の平坦部も非減少と両立するので全域で単調非減少を
+    課してよい。非物理な負のプラントゲイン(np.interp の負傾き)を生む同定ノイズを
+    除く。均しで軸の最大 |rate| の 10% を超えて動いた点があれば同定データ品質を警告。
+    """
+    ys = [r for _, r in points]
+    smoothed = _isotonic(ys)
+    max_rate = max((abs(y) for y in ys), default=0.0)
+    if max_rate > 0.0:
+        worst = max(abs(a - b) for a, b in zip(ys, smoothed))
+        if worst > 0.1 * max_rate:
+            logger.warning(
+                "axis %s: isotonic regression adjusted static curve by %.0f%% of "
+                "max |rate| (%s) -- identification data quality issue",
+                axis,
+                100.0 * worst / max_rate,
+                source,
+            )
+    return [(c, y) for (c, _), y in zip(points, smoothed)]
+
+
 def _responses(samples: list[ProbeSample], axis: str) -> np.ndarray:
     """サンプル列の応答量(先頭サンプル基準の相対値)。
 
@@ -537,6 +578,7 @@ def identify_axis(
     points = sorted((c, fmean(v)) for c, v in rates.items())
     if not any(c == 0.0 for c, _ in points):
         points = sorted(points + [(0.0, 0.0)])
+    points = _monotonic_points(points, run.axis, "identify")
 
     # ---- むだ時間 ----
     thr = _ONSET_THRESHOLD[kind]
@@ -549,10 +591,16 @@ def identify_axis(
                 # 遷移直前の最後のサンプルを基準に応答を測る
                 seq = [by_seg[i - 1][-1]] + by_seg[i]
                 resp = np.abs(_responses(seq, run.axis))
+                prev_s, prev_r = seq[0], float(resp[0])  # 遷移直前(応答≈0)
                 for s, r in zip(seq[1:], resp[1:]):
+                    r = float(r)
                     if r > thr:
-                        deads.append(max(0.0, s.t - t_send - thr / steady))
+                        # しきい値を跨ぐ時刻を前後サンプルで線形補間(1フレーム量子化遅れを除く)
+                        frac = (thr - prev_r) / (r - prev_r) if r > prev_r else 0.0
+                        t_cross = prev_s.t + frac * (s.t - prev_s.t)
+                        deads.append(max(0.0, t_cross - t_send - thr / steady))
                         break
+                    prev_s, prev_r = s, r
         prev_cmd = cmd
     deadtime = float(median(deads)) if deads else 0.0
 
@@ -606,7 +654,10 @@ class PlantModel:
             name: AxisModel(
                 axis=name,
                 unit=a["unit"],
-                points=sorted((float(c), float(r)) for c, r in a["points"]),
+                # レガシー JSON の非単調な外れ点も読込時に均す(ファイル自体は書換えない)
+                points=_monotonic_points(
+                    sorted((float(c), float(r)) for c, r in a["points"]), name, "load"
+                ),
                 deadtime_s=float(a["deadtime_s"]),
             )
             for name, a in data["axes"].items()

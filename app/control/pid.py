@@ -44,13 +44,16 @@ class PID:
         # 微分(計測ノイズをそのまま拾うので、必要なら呼び出し側で平滑化する)
         d = 0.0
         if self._prev is not None and dt > 0.0:
-            d = self.kd * (error - self._prev) / dt
+            # ラップした角度誤差(±180 跨ぎ)は生差が ~360 に飛んで微分キックになるので、
+            # そのフレームだけ微分を捨てる(prev は更新して次フレームから復帰する)。
+            if abs(error - self._prev) <= 180.0:
+                d = self.kd * (error - self._prev) / dt
         self._prev = error
 
         # まず P+D と現在の積分で仮出力を作り、飽和していなければ積分を進める
         unsat = p + self.ki * self._i + d
         if dt > 0.0 and self.ki != 0.0:
-            if self.out_min < unsat < self.out_max or (error * self._i) < 0.0:
+            if self.out_min < unsat < self.out_max or (error * unsat) < 0.0:
                 self._i += error * dt
                 i_term = self.ki * self._i
                 if i_term > self.i_limit:
@@ -67,5 +70,7 @@ class PID:
             out = math.copysign(
                 self.out_deadzone + (1.0 - self.out_deadzone) * min(abs(out), 1.0), out
             )
+            # レール(out_min/out_max)が ±1 より狭いと底上げで超えうるので再クランプ
+            out = max(self.out_min, min(self.out_max, out))
         self.last_p, self.last_i, self.last_d, self.last_out = p, i, d, out
         return out

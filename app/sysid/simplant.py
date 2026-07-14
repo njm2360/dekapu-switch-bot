@@ -120,7 +120,8 @@ class SimulatedVRChat:
             vf = self._rate("forward", t)
             vs = self._rate("strafe", t)
             self._yaw = wrap180(self._yaw + wy * dt)
-            self._pitch = max(-89.0, min(89.0, self._pitch + wp * dt))
+            # 実機のポーズデコーダ(pose.py の asin)は ±90° まで表す
+            self._pitch = max(-90.0, min(90.0, self._pitch + wp * dt))
             yr = math.radians(self._yaw)
             fx, fz = math.sin(yr), math.cos(yr)  # 前方向
             rx, rz = math.cos(yr), -math.sin(yr)  # 右方向

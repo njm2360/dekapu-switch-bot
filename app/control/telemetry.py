@@ -47,6 +47,7 @@ class AxisAccumulator:
         self.settle: float | None = None
         self._s0 = 0
         self._prev = 0
+        self._pe: float | None = None  # 直前の誤差(±180 ラップ検出用)
         self._n = 0
 
     def update(self, e: float, cmd: float, t: float, dt: float, tol: float) -> None:
@@ -57,17 +58,24 @@ class AxisAccumulator:
         self.effort += abs(cmd) * dt
         if ae > self.peak:
             self.peak = ae
+        # ±180 を跨ぐと誤差符号が瞬間反転する(目標を跨いでいない)。この幻の
+        # オーバーシュート/振動を数えないよう、ラップしたフレームは集計から外し、
+        # 以降のフレームを誤判定しないよう基準符号(_s0)をラップ後の符号へ張り替える。
+        wrap = self._pe is not None and abs(e - self._pe) > 180.0
         if self._n == 1:
             self._s0 = 1 if e >= 0 else -1  # 初期誤差の符号(オーバーシュート基準)
+        elif wrap:
+            self._s0 = 1 if e >= 0 else -1  # ラップ後の側へ基準を張り替える
         else:
             over = -self._s0 * e  # 目標(0)を跨いで反対側へ出た量
             if over > self.overshoot:
                 self.overshoot = over
         sign = 1 if e > 0 else (-1 if e < 0 else 0)
-        if sign and self._prev and sign != self._prev:
+        if not wrap and sign and self._prev and sign != self._prev:
             self.osc += 1
         if sign:
             self._prev = sign
+        self._pe = e
         if ae < tol:  # tol 未満を維持し始めた時刻を保持
             if self.settle is None:
                 self.settle = t

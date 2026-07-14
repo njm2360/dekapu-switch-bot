@@ -450,9 +450,11 @@ def strafe_align(
     yaw_err = pitch_err = 0.0
     lat_acc = AxisAccumulator() if track else None
     pitch_acc = AxisAccumulator() if track else None
-    # スタック検出: 窓の開始時刻・位置と、窓内で指令を出したかを追跡する
+    # スタック検出: 窓の開始時刻・窓内の移動経路長Σ|Δpos|・指令を出したかを追跡する
+    # (経路長で見ると、その場往復や微速クロールを「動けていない」と誤判定しない)
     win_t = t0
-    win_pos: tuple[float, float] | None = None
+    win_prev: tuple[float, float] | None = None
+    win_path = 0.0
     win_commanded = False
     try:
         while clock.monotonic() - t0 < gains.align_timeout:
@@ -483,15 +485,17 @@ def strafe_align(
             look.look(0.0, pitch_cmd)
 
             # スタック検出(壁に押し付けて動けない)
-            if win_pos is None:
-                win_t, win_pos = now, cur
+            if win_prev is None:
+                win_t, win_prev = now, cur
+            else:
+                win_path += _dist(cur, win_prev)
+                win_prev = cur
             win_commanded = win_commanded or abs(strafe_cmd) > 1e-3
             if now - win_t >= gains.align_stuck_time:
-                moved = _dist(cur, win_pos)
-                if win_commanded and moved < gains.align_stuck_eps:
+                if win_commanded and win_path < gains.align_stuck_eps:
                     reason = "stuck"
                     break
-                win_t, win_pos, win_commanded = now, cur, False
+                win_t, win_prev, win_path, win_commanded = now, cur, 0.0, False
 
             if track:
                 rec.row(
