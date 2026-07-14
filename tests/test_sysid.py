@@ -8,14 +8,14 @@ import math
 
 import pytest
 
-from pose_hud.controller import (
+from app.control.controller import (
     PatrolGains,
     face_controllers,
     nav_controllers,
 )
-from pose_hud.maneuvers import aim_at, follow_path, turn_to
-from pose_hud.simplant import SimulatedVRChat
-from pose_hud.sysid import (
+from app.control.maneuvers import aim_at, follow_path, turn_to
+from app.sysid.simplant import SimulatedVRChat
+from app.sysid.identify import (
     AxisModel,
     PlantModel,
     extract_dts,
@@ -27,7 +27,7 @@ from pose_hud.sysid import (
     run_move_probe,
     save_run,
 )
-from pose_hud.telemetry import ListRecorder
+from app.control.telemetry import ListRecorder
 
 # VRChat 視点軸ふうの静特性: 0.55 以下はごく遅く、超えると急峻に立ち上がる
 YAW_CURVE = [

@@ -3,11 +3,11 @@ import dataclasses
 from datetime import datetime
 from pathlib import Path
 
-from pose_hud.cli._ctl_log import ControlLog
-from pose_hud.controller import PatrolGains
-from pose_hud.mapping import RoomMapper
-from pose_hud.navigation import NavGrid, plan_path
-from pose_hud.pilot import Pilot
+from app.cli._ctl_log import ControlLog
+from app.control.controller import PatrolGains
+from app.mapping.mapper import RoomMapper
+from app.spatial.navigation import NavGrid, plan_path
+from app.control.pilot import Pilot
 
 Target = tuple[str, tuple[float, float], float]
 

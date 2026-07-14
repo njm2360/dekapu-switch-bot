@@ -12,13 +12,13 @@ import math
 import numpy as np
 import pytest
 
-from pose_hud.controller import PatrolGains, face_controllers, nav_controllers
-from pose_hud.pose import Pose
-from pose_hud.mapping import Bounds
-from pose_hud.navigation import NavGrid
-from pose_hud.maneuvers import aim_at, follow_path, turn_to
-from pose_hud.pilot import Pilot
-from pose_hud.telemetry import AxisMetrics
+from app.control.controller import PatrolGains, face_controllers, nav_controllers
+from app.core.pose import Pose
+from app.mapping.mapper import Bounds
+from app.spatial.navigation import NavGrid
+from app.control.maneuvers import aim_at, follow_path, turn_to
+from app.control.pilot import Pilot
+from app.control.telemetry import AxisMetrics
 
 
 def _pose(t: int, pos, yaw_deg: float = 0.0, pitch_deg: float = 0.0) -> Pose:

@@ -4,11 +4,11 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from pose_hud.capture import WindowsVRChatCapture
-from pose_hud.cli._keys import key_events
-from pose_hud.mapping import RoomMapper
-from pose_hud.mapping_live import LiveMap
-from pose_hud.reader import PoseReader
+from app.perception.capture import WindowsVRChatCapture
+from app.cli._keys import key_events
+from app.mapping.mapper import RoomMapper
+from app.mapping.live import LiveMap
+from app.perception.reader import PoseReader
 
 REWIND_DIST = 0.5  # z を1回押すたびに巻き戻す軌跡長 [m]
 REDRAW_HZ = 5.0  # ライブ地図の再描画レート
@@ -141,7 +141,7 @@ def main() -> None:
         print("no trajectory collected; nothing saved.")
         return
 
-    from pose_hud.mapping_render import render_map  # Agg 固定なので保存時のみ import
+    from app.mapping.render import render_map  # Agg 固定なので保存時のみ import
 
     out_dir = Path("maps") / datetime.now().strftime("%Y%m%d_%H%M%S")
     npz = mapper.save(out_dir / "room")

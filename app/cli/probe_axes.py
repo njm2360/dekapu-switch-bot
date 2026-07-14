@@ -25,7 +25,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from pose_hud.sysid import (
+from app.sysid.identify import (
     AXES,
     AXIS_INPUT,
     PlantModel,
@@ -116,8 +116,8 @@ def _identify_and_save(
 
 
 def _run_live(axes: list[str], out_dir: Path, args) -> list[ProbeRun]:
-    from pose_hud.osc import VRChatOSC
-    from pose_hud.reader import PoseReader
+    from app.control.osc import VRChatOSC
+    from app.perception.reader import PoseReader
 
     reader = PoseReader().start()
     osc = VRChatOSC(host=args.host, port=args.port)

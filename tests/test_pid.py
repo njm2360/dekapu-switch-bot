@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from pose_hud.pid import PID
+from app.control.pid import PID
 
 
 def test_pid_proportional_only():

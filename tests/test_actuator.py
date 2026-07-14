@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import pytest
 
-from pose_hud.actuator import LookActuator, MoveActuator, MouseLookActuator
-from pose_hud.pid import PID
-from pose_hud.controller import (
+from app.control.actuator import LookActuator, MoveActuator, MouseLookActuator
+from app.control.pid import PID
+from app.control.controller import (
     AxisController,
     PatrolGains,
     face_controllers,
     nav_controllers,
 )
-from pose_hud.osc import VRChatOSC
+from app.control.osc import VRChatOSC
 
 
 def test_vrchat_osc_satisfies_both_actuator_protocols():

@@ -7,7 +7,7 @@ import socket
 import pytest
 from pythonosc.osc_message import OscMessage
 
-from pose_hud.osc import VRChatOSC
+from app.control.osc import VRChatOSC
 
 
 def _receiver():

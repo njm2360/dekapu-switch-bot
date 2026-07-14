@@ -68,7 +68,7 @@ probe-axes --max-travel 0.4      # 狭い場所向けに移動範囲を狭める
 probe-axes --from-log logs/probe_XXXX
 ```
 
-## しくみ(pose_hud/sysid.py)
+## しくみ(app/sysid/identify.py)
 
 - **プローブ** `run_axis_probe` / `run_move_probe`: 階段状の指令列を送りながら
   ポーズの時系列を記録する。移動軸版は開始位置からの変位(軸方向への射影)を

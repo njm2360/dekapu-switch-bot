@@ -1,7 +1,7 @@
 from typing import Callable
 
-from .mapping import RoomMapper
-from .mapping_draw import draw_map
+from .mapper import RoomMapper
+from .draw import draw_map
 
 # ライブ操作で使うキー。matplotlib 既定のショートカット(o=ズーム, r=ホーム等)と衝突する
 # ので、該当キーを全 keymap から外してから使う。

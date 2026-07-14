@@ -9,8 +9,8 @@ import argparse
 import logging
 import time
 
-from pose_hud.capture import WindowNotFoundError, WindowsVRChatCapture
-from pose_hud.reader import PoseReader
+from app.perception.capture import WindowNotFoundError, WindowsVRChatCapture
+from app.perception.reader import PoseReader
 
 
 def main() -> None:

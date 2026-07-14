@@ -5,7 +5,7 @@ from typing import Iterable, Literal
 
 import numpy as np
 
-from .pose import Pose
+from ..core.pose import Pose
 
 Kind = Literal["outer", "inner"]
 _KINDS: tuple[str, str] = ("outer", "inner")  # 保存時の int 対応: outer=0, inner=1

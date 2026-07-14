@@ -1,7 +1,7 @@
-from pose_hud.capture import WindowsVRChatCapture
-from pose_hud.cli._keys import key_events
-from pose_hud.reader import PoseReader
-from pose_hud.triangulate import Sighting, triangulate
+from app.perception.capture import WindowsVRChatCapture
+from app.cli._keys import key_events
+from app.perception.reader import PoseReader
+from app.spatial.triangulate import Sighting, triangulate
 
 
 def main() -> None:

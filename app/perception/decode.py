@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .pose import Pose
+from ..core.pose import Pose
 from .spec import (
     BLOCK,
     COLS,

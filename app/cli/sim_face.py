@@ -14,13 +14,13 @@ import argparse
 import dataclasses
 from pathlib import Path
 
-from pose_hud.cli._ctl_log import ControlLog
-from pose_hud.cli.patrol_buttons import _add_gain_args
-from pose_hud.controller import PatrolGains, face_controllers
-from pose_hud.maneuvers import turn_to
-from pose_hud.simplant import SimulatedVRChat
-from pose_hud.sysid import PlantModel
-from pose_hud.telemetry import ListRecorder
+from app.cli._ctl_log import ControlLog
+from app.cli.patrol_buttons import _add_gain_args
+from app.control.controller import PatrolGains, face_controllers
+from app.control.maneuvers import turn_to
+from app.sysid.simplant import SimulatedVRChat
+from app.sysid.identify import PlantModel
+from app.control.telemetry import ListRecorder
 
 
 def main() -> None:

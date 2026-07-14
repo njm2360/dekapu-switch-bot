@@ -8,11 +8,11 @@ from typing import Iterator
 
 import numpy as np
 
+from ..core.pose import Pose
 from .capture import FrameSource
 from .decode import DecodeResult, DecodeStatus, decode_pose
-from .pose import Pose
 
-logger = logging.getLogger("pose_hud")
+logger = logging.getLogger("app")
 
 _STATS_WINDOW = 120  # fps 推定に使う直近サンプル数
 _WARN_AFTER = 120  # 連続失敗がこれを超えたら一度だけ警告する

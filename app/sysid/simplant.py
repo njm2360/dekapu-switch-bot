@@ -19,9 +19,9 @@ import math
 import threading
 from collections import deque
 
-from .guidance import wrap180
-from .pose import Pose
-from .sysid import PlantModel
+from ..control.guidance import wrap180
+from ..core.pose import Pose
+from .identify import PlantModel
 
 
 class _DelayedCommand:

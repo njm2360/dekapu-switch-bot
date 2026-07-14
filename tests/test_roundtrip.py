@@ -7,11 +7,11 @@ import math
 import numpy as np
 import pytest
 
-from pose_hud.capture import ArrayFrameSource
-from pose_hud.decode import DecodeStatus, decode_pose, decode_words
-from pose_hud.encode import pack_pose_words, render_grid, render_pose
-from pose_hud.reader import PoseReader
-from pose_hud.spec import CAPTURE_H, CAPTURE_W, MAGIC
+from app.perception.capture import ArrayFrameSource
+from app.perception.decode import DecodeStatus, decode_pose, decode_words
+from app.perception.encode import pack_pose_words, render_grid, render_pose
+from app.perception.reader import PoseReader
+from app.perception.spec import CAPTURE_H, CAPTURE_W, MAGIC
 
 SAMPLE_POSES = [
     (0, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0), (0.0, 1.0, 0.0)),

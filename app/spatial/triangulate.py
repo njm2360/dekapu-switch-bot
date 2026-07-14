@@ -3,7 +3,7 @@ from typing import Iterable, Sequence
 
 import numpy as np
 
-from .pose import Pose
+from ..core.pose import Pose
 
 
 def _normalize(v: np.ndarray) -> np.ndarray:

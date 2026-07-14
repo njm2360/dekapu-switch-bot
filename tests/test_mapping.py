@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from pose_hud.pose import Pose
-from pose_hud.mapping import Bounds, RoomMapper
+from app.core.pose import Pose
+from app.mapping.mapper import Bounds, RoomMapper
 
 
 def rectangle_path(width=4.0, depth=6.0, step=0.1, x0=1.0, z0=-2.0):
@@ -314,7 +314,7 @@ def test_redo_segment_discards_current_segment_keeps_mode():
 # ---- レンダラ(matplotlib) ----------------------------------------------
 def test_render_map_png(tmp_path):
     pytest.importorskip("matplotlib")
-    from pose_hud.mapping_render import render_map
+    from app.mapping.render import render_map
 
     m = RoomMapper(min_move=0.0)
     for x, z in rectangle_path(4.0, 6.0):

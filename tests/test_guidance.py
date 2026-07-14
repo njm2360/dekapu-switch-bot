@@ -6,7 +6,7 @@ import math
 
 import pytest
 
-from pose_hud.guidance import (
+from app.control.guidance import (
     aim_angle,
     forward_factor,
     heading_error,

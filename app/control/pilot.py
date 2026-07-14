@@ -11,7 +11,7 @@ from typing import Callable, Iterable
 from .actuator import LookActuator, MouseLookActuator, MoveActuator
 from .controller import PatrolGains, face_controllers, nav_controllers
 from .maneuvers import AimResult, NavResult, PoseSource, aim_at, follow_path, turn_to
-from .navigation import NavGrid, plan_path
+from ..spatial.navigation import NavGrid, plan_path
 from .telemetry import NullRecorder, Recorder
 
 
@@ -60,7 +60,7 @@ class Pilot:
         if grid is None:
             if map_path is None:
                 raise ValueError("map_path か grid のどちらかを指定してください")
-            from .mapping import RoomMapper
+            from ..mapping.mapper import RoomMapper
 
             grid = NavGrid.from_mapper(
                 RoomMapper.load(map_path),
@@ -68,9 +68,9 @@ class Pilot:
                 avatar_radius=radius,
                 gap_close=gap_close,
             )
-        from .capture import WindowsVRChatCapture
+        from ..perception.capture import WindowsVRChatCapture
         from .osc import VRChatOSC
-        from .reader import PoseReader
+        from ..perception.reader import PoseReader
 
         reader = PoseReader(source=WindowsVRChatCapture()).start()
         osc = VRChatOSC()

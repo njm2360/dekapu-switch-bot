@@ -1,10 +1,10 @@
 # PoseTelemetryHUD シェーダー仕様
 
 VRChat のアバターに載せたシェーダー(PoseTelemetryHUD)が、視点のグローバル座標と向き
-(6DoF)を画面左上に白黒ビットグリッドとして HUD 描画する。デコーダ(`pose_hud`)はこれを
+(6DoF)を画面左上に白黒ビットグリッドとして HUD 描画する。デコーダ(`app`)はこれを
 スクリーンキャプチャで読み取り、座標フィードバック制御(OSC で移動・視点操作を注入)に使う。
 
-デコーダ実装はこの仕様に準拠すること。定数は `pose_hud/spec.py` のモジュール定数に
+デコーダ実装はこの仕様に準拠すること。定数は `app/perception/spec.py` のモジュール定数に
 一元管理されている(`BLOCK` / `OFFSET_X` / `OFFSET_Y` をシェーダーの `_BlockPx` /
 `_OffsetX` / `_OffsetY` と一致させる)。
 

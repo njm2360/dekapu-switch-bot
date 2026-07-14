@@ -2,7 +2,7 @@ import numpy as np
 from matplotlib.patches import PathPatch
 from matplotlib.path import Path as MplPath
 
-from .mapping import RoomMapper
+from .mapper import RoomMapper
 
 OUTER_COLOR = "#1f77b4"
 INNER_COLOR = "#d62728"

@@ -5,8 +5,8 @@ import matplotlib
 matplotlib.use("Agg")  # ヘッドレス(PNG 保存)
 import matplotlib.pyplot as plt
 
-from .mapping import RoomMapper
-from .mapping_draw import draw_map
+from .mapper import RoomMapper
+from .draw import draw_map
 
 
 def render_map(

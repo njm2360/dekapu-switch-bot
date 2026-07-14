@@ -27,8 +27,8 @@ from typing import Callable
 
 import numpy as np
 
-from .guidance import wrap180
-from .maneuvers import PoseSource
+from ..control.guidance import wrap180
+from ..control.maneuvers import PoseSource
 
 AXES = ("yaw", "pitch", "forward", "strafe")
 # VRChat の /input/ 軸名(プローブ CLI が osc.axis() に渡す)

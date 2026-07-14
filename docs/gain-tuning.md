@@ -14,7 +14,7 @@
 
 ## ゲインの意味と効き方
 
-ゲインの定義は `pose_hud/controller.py` の `PatrolGains` に集約されている。
+ゲインの定義は `app/control/controller.py` の `PatrolGains` に集約されている。
 CLI フラグは `sim-face` / `patrol-buttons` で共通(既定値も同じ)。
 
 ### 正対(face)yaw — 振動が出やすい軸
@@ -55,7 +55,7 @@ osc 18〜19 回・オーバーシュート ≈7°・未収束。対策の候補:
 
 ## 応答指標(AxisMetrics)の読み方
 
-`sim-face` の表も実機ログも同じ計算で出している(`pose_hud/telemetry.py`)。
+`sim-face` の表も実機ログも同じ計算で出している(`app/control/telemetry.py`)。
 
 | 指標           | 意味                                    | 見方                                         |
 | -------------- | --------------------------------------- | -------------------------------------------- |
@@ -75,7 +75,7 @@ sim-face --model ... --log logs/simface.csv   # フレーム記録も残す
 ```
 
 - 本番と同一の正対ループ(`turn_to` → `_face_loop`)を実時間で回す。模擬プラント
-  (`pose_hud/simplant.py`)は同定した静特性・むだ時間・dt 系列に従って状態を
+  (`app/sysid/simplant.py`)は同定した静特性・むだ時間・dt 系列に従って状態を
   積分する。
 - `--yaw-err` の小さい値(2〜5°)が、最後のボタン合わせに相当する。**まず現行ゲインで
   振動が再現されることを確認**してから(モデルの妥当性確認)、ゲインを振る。

@@ -13,8 +13,8 @@ from typing import Callable, Protocol
 from .actuator import LookActuator, MoveActuator
 from .controller import FaceControllers, NavControllers, PatrolGains
 from .guidance import forward_factor, heading_error, pitch_error, wrap180
-from .navigation import Path
-from .pose import Pose
+from ..spatial.navigation import Path
+from ..core.pose import Pose
 from .telemetry import AxisAccumulator, AxisMetrics, NullRecorder, Recorder
 
 

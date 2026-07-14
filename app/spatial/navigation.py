@@ -16,7 +16,7 @@ from scipy.ndimage import (
     label,
 )
 
-from .mapping import Bounds, RoomMapper
+from ..mapping.mapper import Bounds, RoomMapper
 
 
 def _dilate(mask: np.ndarray, iters: int, connectivity: int = 8) -> np.ndarray:
