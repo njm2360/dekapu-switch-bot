@@ -16,6 +16,7 @@ logger = logging.getLogger("app")
 
 _STATS_WINDOW = 120  # fps 推定に使う直近サンプル数
 _WARN_AFTER = 120  # 連続失敗がこれを超えたら一度だけ警告する
+_QUEUE_MAX = 256  # poses() 用キューの上限(未消費なら古いものから捨てる)
 
 
 def _fps_from(times: deque[float]) -> float:
@@ -77,7 +78,7 @@ class PoseReader:
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
         self._warned = False
-        self._queue: queue.Queue[Pose] = queue.Queue()
+        self._queue: queue.Queue[Pose] = queue.Queue(maxsize=_QUEUE_MAX)
 
         self._capture_times: deque[float] = deque(maxlen=_STATS_WINDOW)
         self._frame_times: deque[float] = deque(maxlen=_STATS_WINDOW)
@@ -154,7 +155,7 @@ class PoseReader:
                     self._latest = pose
                     self.stats.new_frames += 1
                     self._frame_times.append(now)
-                    self._queue.put(pose)
+                    self._enqueue(pose)
             else:
                 self.stats.decode_fail += 1
                 self.stats.consecutive_fail += 1
@@ -167,20 +168,45 @@ class PoseReader:
             try:
                 frame = self.source.grab()
             except Exception as exc:  # noqa: BLE001 - ウィンドウ消失等は回復対象
-                logger.debug("grab failed: %s", exc)
-                self._stop.wait(0.2)
+                self._note_failure(f"capture failed: {exc} (VRChat window gone?)")
                 continue
-            self.process_frame(frame)
+            try:
+                self.process_frame(frame)
+            except Exception as exc:  # noqa: BLE001 - フレーム不正(リサイズ等)は回復対象
+                self._note_failure(f"frame processing failed: {exc}")
+
+    def _note_failure(self, detail: str) -> None:
+        """キャプチャ/処理の例外を失敗として計上し、少し待って再試行する。"""
+        logger.debug(detail)
+        with self._lock:
+            self.stats.consecutive_fail += 1
+            self._maybe_warn(detail)
+        self._stop.wait(0.2)
 
     # ---- ヘルパ(ロック保持前提) ---------------------------------------
-    def _maybe_warn(self) -> None:
+    def _enqueue(self, pose: Pose) -> None:
+        """poses() 用キューへ追加。満杯なら最古を捨てて最新を優先する。
+
+        get_latest() しか使わない消費者でもキューが無限に溜まらないようにする。
+        """
+        while True:
+            try:
+                self._queue.put_nowait(pose)
+                return
+            except queue.Full:
+                try:
+                    self._queue.get_nowait()
+                except queue.Empty:
+                    pass
+
+    def _maybe_warn(self, detail: str | None = None) -> None:
         if not self._warned and self.stats.consecutive_fail >= _WARN_AFTER:
             self._warned = True
             logger.warning(
                 "no valid HUD for %d consecutive frames (last=%s). "
                 "menu open? HUD_Enable=false? wrong window?",
                 self.stats.consecutive_fail,
-                self.stats.last_status,
+                detail or self.stats.last_status,
             )
 
     def _update_fps(self) -> None:

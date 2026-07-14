@@ -96,63 +96,66 @@ def follow_path(
     frames = 0
     reason = "arrived"
     yaw_acc = AxisAccumulator() if track else None
-    while idx < len(wps):
-        pose, dt, now = _next_frame(reader, last_t, last_time)
-        if pose is None:
-            reason = "hud_lost"
-            say(f"  [{name}] HUD lost, abort nav")
-            break
-        last_t, last_time = pose.time_ms, now
-        frames += 1
-        cur = (pose.position[0], pose.position[2])
+    try:
+        while idx < len(wps):
+            pose, dt, now = _next_frame(reader, last_t, last_time)
+            if pose is None:
+                reason = "hud_lost"
+                say(f"  [{name}] HUD lost, abort nav")
+                break
+            last_t, last_time = pose.time_ms, now
+            frames += 1
+            cur = (pose.position[0], pose.position[2])
 
-        prev_idx = idx
-        while idx < len(wps) - 1 and _dist(cur, wps[idx]) < gains.arrive:
-            idx += 1
-        if idx != prev_idx:
-            nav.yaw.reset_derivative()  # 目標が急に変わったとき turn が跳ねるのを防ぐ
-        target = wps[idx]
-        final = idx == len(wps) - 1
-        err, dist = heading_error(cur, pose.yaw_deg, target)
-        if final and dist < gains.arrive:
-            break
+            prev_idx = idx
+            while idx < len(wps) - 1 and _dist(cur, wps[idx]) < gains.arrive:
+                idx += 1
+            if idx != prev_idx:
+                nav.yaw.reset_derivative()  # 目標が急に変わったとき turn が跳ねるのを防ぐ
+            target = wps[idx]
+            final = idx == len(wps) - 1
+            err, dist = heading_error(cur, pose.yaw_deg, target)
+            if final and dist < gains.arrive:
+                break
 
-        turn = nav.yaw.update(err, dt)
-        ff = forward_factor(err)
-        speed = (nav.forward.update(dist, dt) if final else gains.speed) * ff
-        look.look(turn)
-        move.move(forward=speed)
+            turn = nav.yaw.update(err, dt)
+            ff = forward_factor(err)
+            speed = (nav.forward.update(dist, dt) if final else gains.speed) * ff
+            look.look(turn)
+            move.move(forward=speed)
 
-        if track:
-            rec.row(
-                t=now - t0,
-                phase="nav",
-                target=name,
-                wp=idx,
-                dt=dt,
-                x=pose.position[0],
-                y=pose.position[1],
-                z=pose.position[2],
-                yaw=pose.yaw_deg,
-                pitch=pose.pitch_deg,
-                tx=target[0],
-                tz=target[1],
-                dist=dist,
-                yaw_err=err,
-                turn_p=nav.yaw.last_p,
-                turn_i=nav.yaw.last_i,
-                turn_d=nav.yaw.last_d,
-                turn=turn,
-                fwd=speed,
-                fwd_factor=ff,
-            )
-            yaw_acc.update(err, turn, now - t0, dt, gains.face_tol)
-        if now - t0 > gains.nav_timeout:
-            reason = "timeout"
-            say(f"  [{name}] nav timeout")
-            break
-    look.stop()
-    move.stop()
+            if track:
+                rec.row(
+                    t=now - t0,
+                    phase="nav",
+                    target=name,
+                    wp=idx,
+                    dt=dt,
+                    x=pose.position[0],
+                    y=pose.position[1],
+                    z=pose.position[2],
+                    yaw=pose.yaw_deg,
+                    pitch=pose.pitch_deg,
+                    tx=target[0],
+                    tz=target[1],
+                    dist=dist,
+                    yaw_err=err,
+                    turn_p=nav.yaw.last_p,
+                    turn_i=nav.yaw.last_i,
+                    turn_d=nav.yaw.last_d,
+                    turn=turn,
+                    fwd=speed,
+                    fwd_factor=ff,
+                )
+                yaw_acc.update(err, turn, now - t0, dt, gains.face_tol)
+            if now - t0 > gains.nav_timeout:
+                reason = "timeout"
+                say(f"  [{name}] nav timeout")
+                break
+    finally:
+        # 例外(Ctrl+C・OSC/マウスエラー等)で抜けてもアバターを確実に止める
+        look.stop()
+        move.stop()
     return NavResult(
         reached=True,
         arrived=(reason == "arrived"),
@@ -196,54 +199,57 @@ def _face_loop(
     yaw_err = pitch_err = 0.0
     yaw_acc = AxisAccumulator() if track else None
     pitch_acc = AxisAccumulator() if (track and control_pitch) else None
-    while time.monotonic() - t0 < gains.face_timeout:
-        pose, dt, now = _next_frame(reader, last_t, last_time)
-        if pose is None:
-            break
-        last_t, last_time = pose.time_ms, now
-        frames += 1
-        yaw_err, pitch_err = errors(pose)
-
-        pitch_ok = not control_pitch or abs(pitch_err) < gains.face_tol
-        if abs(yaw_err) < gains.face_tol and pitch_ok:
-            settle += 1
-            if settle >= gains.settle:
-                converged = True
+    try:
+        while time.monotonic() - t0 < gains.face_timeout:
+            pose, dt, now = _next_frame(reader, last_t, last_time)
+            if pose is None:
                 break
-        else:
-            settle = 0
+            last_t, last_time = pose.time_ms, now
+            frames += 1
+            yaw_err, pitch_err = errors(pose)
 
-        turn = face.yaw.update(yaw_err, dt)
-        pitch_cmd = face.pitch.update(pitch_err, dt) if control_pitch else 0.0
-        look.look(turn, pitch_cmd)
+            pitch_ok = not control_pitch or abs(pitch_err) < gains.face_tol
+            if abs(yaw_err) < gains.face_tol and pitch_ok:
+                settle += 1
+                if settle >= gains.settle:
+                    converged = True
+                    break
+            else:
+                settle = 0
 
-        if track:
-            rec.row(
-                t=now - t0,
-                phase=phase,
-                target=name,
-                dt=dt,
-                x=pose.position[0],
-                y=pose.position[1],
-                z=pose.position[2],
-                yaw=pose.yaw_deg,
-                pitch=pose.pitch_deg,
-                **extra,
-                yaw_err=yaw_err,
-                pitch_err=pitch_err,
-                turn_p=face.yaw.last_p,
-                turn_i=face.yaw.last_i,
-                turn_d=face.yaw.last_d,
-                turn=turn,
-                pitch_p=face.pitch.last_p,
-                pitch_i=face.pitch.last_i,
-                pitch_d=face.pitch.last_d,
-                pitch_cmd=pitch_cmd,
-            )
-            yaw_acc.update(yaw_err, turn, now - t0, dt, gains.face_tol)
-            if pitch_acc is not None:
-                pitch_acc.update(pitch_err, pitch_cmd, now - t0, dt, gains.face_tol)
-    look.stop()
+            turn = face.yaw.update(yaw_err, dt)
+            pitch_cmd = face.pitch.update(pitch_err, dt) if control_pitch else 0.0
+            look.look(turn, pitch_cmd)
+
+            if track:
+                rec.row(
+                    t=now - t0,
+                    phase=phase,
+                    target=name,
+                    dt=dt,
+                    x=pose.position[0],
+                    y=pose.position[1],
+                    z=pose.position[2],
+                    yaw=pose.yaw_deg,
+                    pitch=pose.pitch_deg,
+                    **extra,
+                    yaw_err=yaw_err,
+                    pitch_err=pitch_err,
+                    turn_p=face.yaw.last_p,
+                    turn_i=face.yaw.last_i,
+                    turn_d=face.yaw.last_d,
+                    turn=turn,
+                    pitch_p=face.pitch.last_p,
+                    pitch_i=face.pitch.last_i,
+                    pitch_d=face.pitch.last_d,
+                    pitch_cmd=pitch_cmd,
+                )
+                yaw_acc.update(yaw_err, turn, now - t0, dt, gains.face_tol)
+                if pitch_acc is not None:
+                    pitch_acc.update(pitch_err, pitch_cmd, now - t0, dt, gains.face_tol)
+    finally:
+        # 例外で抜けても視点の回転を確実に止める
+        look.stop()
     return AimResult(
         converged=converged,
         yaw_err=yaw_err,

@@ -49,15 +49,16 @@ def test_look_turn_and_pitch():
         sock.close()
 
 
-def test_look_without_pitch_sends_only_horizontal():
+def test_look_without_pitch_zeroes_vertical():
+    # /input 軸は最後の値を保持するため、pitch=0 も明示送信して止める必要がある
     sock, port = _receiver()
     try:
         osc = VRChatOSC("127.0.0.1", port)
-        osc.look(0.2)                        # pitch=0 -> LookVertical は送らない
+        osc.look(0.2)
         a1, p1 = _recv(sock)
+        a2, p2 = _recv(sock)
         assert a1 == "/input/LookHorizontal" and p1[0] == pytest.approx(0.2)
-        with pytest.raises(socket.timeout):
-            _recv(sock)
+        assert a2 == "/input/LookVertical" and p2[0] == pytest.approx(0.0)
     finally:
         sock.close()
 

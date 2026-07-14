@@ -1,14 +1,18 @@
-"""操作アクチュエータ: 視点(look)と移動(move)を独立に差し替えるための IF。
+"""操作アクチュエータ: 視点(look)・移動(move)・押下(interact)を独立に差し替えるための IF。
 
 制御ループは LookActuator / MoveActuator へ指令値 [-1,1] を出すだけで、実際の注入方法
 (OSC / DirectInput)は実装側が吸収する。look と move は別プロトコルなので、視点は
 マウス・移動は OSC、のように片方だけ差し替えられる。
 
+InteractActuator は連続軸ではなく単発の押下(press/release/click)なので、
+PoseSource や gains に依存しない。呼び出し側(Pilot.click 等)が都度どちらの実装
+(OSC の /input/UseRight か、マウスクリックか)を渡すかを選べる。
+
 VRChat の HUD 表示切替(`/avatar/parameters/HUD_Enable`)はアクチュエータではなく OSC
 固有の操作なので、ここには含めない(`osc.VRChatOSC.hud_enable` を使う)。
 
-`osc.VRChatOSC` は look / move / stop を備えるため、両プロトコルをそのまま満たす
-(OSC 経由ならアダプタ不要)。
+`osc.VRChatOSC` は look / move / interact / stop を備えるため、全プロトコルをそのまま
+満たす(OSC 経由ならアダプタ不要)。
 """
 
 from typing import Protocol, runtime_checkable
@@ -26,6 +30,15 @@ class MoveActuator(Protocol):
     def move(self, forward: float = 0.0, strafe: float = 0.0) -> None: ...
 
     def stop(self) -> None: ...
+
+
+@runtime_checkable
+class InteractActuator(Protocol):
+    def press(self) -> None: ...
+
+    def release(self) -> None: ...
+
+    def click(self) -> None: ...
 
 
 class MouseLookActuator:
@@ -67,3 +80,32 @@ class MouseLookActuator:
 
     def stop(self) -> None:
         pass
+
+
+class MouseClickActuator:
+    """pydirectinput の左クリックで interact する InteractActuator。
+
+    ``press``/``release``/``click`` を差し替えるとテストできる
+    (既定は ``pydirectinput`` の同名関数)。
+    """
+
+    def __init__(self, press=None, release=None, click=None):
+        if press is None or release is None or click is None:
+            import pydirectinput
+
+            pydirectinput.PAUSE = 0.0
+            press = press or pydirectinput.mouseDown
+            release = release or pydirectinput.mouseUp
+            click = click or pydirectinput.click
+        self._press = press
+        self._release = release
+        self._click = click
+
+    def press(self) -> None:
+        self._press()
+
+    def release(self) -> None:
+        self._release()
+
+    def click(self) -> None:
+        self._click()

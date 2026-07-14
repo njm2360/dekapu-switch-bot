@@ -19,10 +19,13 @@ class VRChatOSC:
         self.axis("Horizontal", strafe)
 
     def look(self, turn: float = 0.0, pitch: float = 0.0) -> None:
-        """水平旋回(+で右)。pitch を与えると上下視点も動かす。"""
+        """水平旋回(+で右)・上下視点(+で上)。
+
+        VRChat の /input 軸は最後に送った値を保持し続けるため、制御ループでは
+        0 も明示的に送って止める必要がある。両軸とも毎回送信する。
+        """
         self.axis("LookHorizontal", turn)
-        if pitch:
-            self.look_vertical(pitch)
+        self.axis("LookVertical", pitch)
 
     def look_vertical(self, pitch: float = 0.0) -> None:
         """上下視点。+で上。"""
@@ -41,6 +44,16 @@ class VRChatOSC:
     def jump(self) -> None:
         self.button("Jump", True)
         self.button("Jump", False)
+
+    def press(self) -> None:
+        self.button("UseRight", True)
+
+    def release(self) -> None:
+        self.button("UseRight", False)
+
+    def click(self) -> None:
+        self.press()
+        self.release()
 
     # ---- アバターパラメータ --------------------------------------------
     def avatar_param(self, name: str, value) -> None:
