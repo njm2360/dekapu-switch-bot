@@ -11,7 +11,13 @@ from dataclasses import dataclass
 from typing import Callable, Protocol
 
 from .actuator import LookActuator, MoveActuator
-from .controller import AxisController, FaceControllers, NavControllers, PatrolGains
+from .controller import (
+    AxisController,
+    FaceControllers,
+    NavControllers,
+    PatrolGains,
+    TranslateControllers,
+)
 from .guidance import forward_factor, heading_error, pitch_error, wrap180
 from ..spatial.navigation import Path
 from ..core.pose import Pose
@@ -175,6 +181,106 @@ def follow_path(
     )
 
 
+def follow_path_hold_view(
+    reader: PoseSource,
+    look: LookActuator,
+    move: MoveActuator,
+    waypoints: list[tuple[float, float]],
+    gains: PatrolGains,
+    ctl: TranslateControllers,
+    *,
+    clock: Clock = time,
+    recorder: Recorder | None = None,
+    announce: Callable[[str], None] | None = None,
+    name: str = "",
+) -> NavResult:
+    rec = recorder or NullRecorder()
+    track = not isinstance(rec, NullRecorder)
+    say = announce or (lambda _m: None)
+    wps = list(waypoints)
+    if not wps:
+        return NavResult(True, True, "arrived", None, 0.0, 0)
+
+    ctl.forward.reset()
+    ctl.strafe.reset()
+    idx = 1 if len(wps) > 1 else 0
+    last_t: int | None = None
+    last_time = t0 = clock.monotonic()
+    frames = 0
+    reason = "arrived"
+    try:
+        while idx < len(wps):
+            pose, dt, now = _next_frame(reader, last_t, last_time, clock=clock)
+            if pose is None:
+                reason = "hud_lost"
+                say(f"  [{name}] HUD lost, abort move")
+                break
+            last_t, last_time = pose.time_ms, now
+            frames += 1
+            cur = (pose.position[0], pose.position[2])
+
+            prev_idx = idx
+            while idx < len(wps) - 1 and _dist(cur, wps[idx]) < gains.arrive:
+                idx += 1
+            if idx != prev_idx:
+                # 目標が急に変わったとき前後・左右の誤差が跳ねて D 項がスパイクするのを防ぐ
+                ctl.forward.reset_derivative()
+                ctl.strafe.reset_derivative()
+            target = wps[idx]
+            final = idx == len(wps) - 1
+            dist = _dist(cur, target)
+            if final and dist < gains.arrive:
+                break
+
+            # 目標への世界誤差を、現在の体の向きで前方向/右方向へ射影する(視点は回さない)
+            ex, ez = target[0] - cur[0], target[1] - cur[1]
+            yr = math.radians(pose.yaw_deg)
+            fwd_err = ex * math.sin(yr) + ez * math.cos(yr)
+            right_err = ex * math.cos(yr) - ez * math.sin(yr)
+
+            fwd = ctl.forward.update(fwd_err, dt)
+            strafe = ctl.strafe.update(right_err, dt)
+            move.move(forward=fwd, strafe=strafe)
+            look.look(0.0, 0.0)  # 視点はゼロ指令で保持(前フェーズの残留指令も打ち消す)
+
+            if track:
+                rec.row(
+                    t=now - t0,
+                    phase="move",
+                    target=name,
+                    wp=idx,
+                    dt=dt,
+                    x=pose.position[0],
+                    y=pose.position[1],
+                    z=pose.position[2],
+                    yaw=pose.yaw_deg,
+                    pitch=pose.pitch_deg,
+                    tx=target[0],
+                    tz=target[1],
+                    dist=dist,
+                    fwd_err=fwd_err,
+                    right_err=right_err,
+                    fwd=fwd,
+                    strafe=strafe,
+                )
+            if now - t0 > gains.nav_timeout:
+                reason = "timeout"
+                say(f"  [{name}] move timeout")
+                break
+    finally:
+        # 例外で抜けても移動・視点を確実に止める
+        move.stop()
+        look.stop()
+    return NavResult(
+        reached=True,
+        arrived=(reason == "arrived"),
+        reason=reason,
+        path=None,
+        elapsed=clock.monotonic() - t0,
+        frames=frames,
+    )
+
+
 def _face_loop(
     reader: PoseSource,
     look: LookActuator,
@@ -289,7 +395,7 @@ def strafe_align(
 ) -> AimResult:
     """最終照準: 視点(yaw)は回さず、体の横移動で誤差を潰す。
 
-    視点軸は指令≈0.55以下が効かず、不感帯補償するとリミットサイクルになる
+    視点軸は指令0.50以下が効かず、不感帯補償するとリミットサイクルになる
     (gain-tuning.md 参照)。移動軸は連続的に効くため、粗い正対(aim_at)後の
     残り yaw 誤差を横ずれ e = dist·sin(yaw_err)[m] に換算して横移動で吸収
     すれば発振が原理的に出ない。pitch は従来どおり視点で合わせる。

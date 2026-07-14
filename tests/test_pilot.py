@@ -17,11 +17,18 @@ from app.control.controller import (
     face_controllers,
     nav_controllers,
     strafe_controller,
+    translate_controllers,
 )
 from app.core.pose import Pose
 from app.mapping.mapper import Bounds
 from app.spatial.navigation import NavGrid
-from app.control.maneuvers import aim_at, follow_path, strafe_align, turn_to
+from app.control.maneuvers import (
+    aim_at,
+    follow_path,
+    follow_path_hold_view,
+    strafe_align,
+    turn_to,
+)
 from app.control.pilot import Pilot
 from app.control.telemetry import AxisMetrics
 
@@ -217,9 +224,7 @@ def test_strafe_align_strafes_toward_error_side():
 
 def test_strafe_align_stuck_abort():
     # 位置が変わらない(壁に押し付け)のに誤差が残る → stuck で打ち切り
-    g = _gains(
-        settle=3, align_tol=0.02, align_stuck_time=0.15, align_timeout=5.0
-    )
+    g = _gains(settle=3, align_tol=0.02, align_stuck_time=0.15, align_timeout=5.0)
 
     class FrozenReader:
         """毎回新しい time_ms を返すが位置は動かない(壁押し付けの再現)。"""
@@ -244,6 +249,66 @@ def test_strafe_align_stuck_abort():
     assert not res.converged and res.reason == "stuck"
     assert res.elapsed < 2.0  # align_timeout(5s)よりずっと早く抜ける
     assert move.stops == 1
+
+
+# ---- follow_path_hold_view(視点を変えずに並進) -------------------------
+def test_hold_view_strafes_to_side_without_turning():
+    # 体は +Z を向いたまま(yaw=0)、右(+X)の目標へ。横移動指令が出て視点は一切回さない。
+    g = _gains(arrive=0.35)
+    # +X へ進んでいく位置系列(最後は最終WP上=到達)
+    poses = [
+        _pose(i + 1, (x, 1.6, 0.0)) for i, x in enumerate([0.0, 0.5, 1.0, 1.5, 2.0])
+    ]
+    look, move = RecActuator(), RecActuator()
+    res = follow_path_hold_view(
+        FakeReader(poses),
+        look,
+        move,
+        [(0.0, 0.0), (2.0, 0.0)],
+        g,
+        translate_controllers(g),
+        name="m",
+    )
+    assert res.arrived
+    assert move.moves[0][1] > 0.0  # 初手は右へ横移動(目標が右)
+    assert all(abs(f) < 1e-9 for f, _s in move.moves)  # 前後成分は出ない(真横)
+    assert look.looks and all(t == 0.0 and p == 0.0 for t, p in look.looks)  # 視点固定
+    assert move.stops == 1 and look.stops == 1  # 終了時に必ず停止
+
+
+def test_hold_view_moves_forward_when_target_ahead():
+    # 目標が正面(+Z)→ 前進成分が出て横は出ない。視点は回さない。
+    g = _gains(arrive=0.35)
+    poses = [
+        _pose(i + 1, (0.0, 1.6, z)) for i, z in enumerate([0.0, 0.5, 1.0, 1.5, 2.0])
+    ]
+    look, move = RecActuator(), RecActuator()
+    res = follow_path_hold_view(
+        FakeReader(poses),
+        look,
+        move,
+        [(0.0, 0.0), (0.0, 2.0)],
+        g,
+        translate_controllers(g),
+    )
+    assert res.arrived
+    assert move.moves[0][0] > 0.0  # 初手は前進(目標が正面)
+    assert all(abs(s) < 1e-9 for _f, s in move.moves)  # 横成分は出ない
+    assert all(t == 0.0 for t, _p in look.looks)  # 視点(yaw)は回さない
+
+
+def test_pilot_move_to_reaches_holding_view():
+    # Pilot.move_to は plan_path で壁回避しつつ、視点を変えずに到達する(start≈goal で即到達)
+    look, move = RecActuator(), RecActuator()
+    pilot = Pilot(
+        _grid(np.ones((10, 10), bool)),
+        FakeReader([_pose(1, (0.5, 1.6, 0.5))]),
+        look,
+        move,
+    )
+    res = pilot.move_to((0.5, 0.5))
+    assert res.reached and res.arrived
+    assert all(t == 0.0 and p == 0.0 for t, p in look.looks)  # 視点固定
 
 
 # ---- チューニング指標(AxisMetrics) -----------------------------------

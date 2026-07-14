@@ -8,6 +8,7 @@ from .controller import (
     face_controllers,
     nav_controllers,
     strafe_controller,
+    translate_controllers,
 )
 from .maneuvers import (
     AimResult,
@@ -15,6 +16,7 @@ from .maneuvers import (
     PoseSource,
     aim_at,
     follow_path,
+    follow_path_hold_view,
     strafe_align,
     turn_to,
 )
@@ -48,6 +50,7 @@ class Pilot:
         self.nav = nav_controllers(self.gains)
         self.face = face_controllers(self.gains)
         self.strafe = strafe_controller(self.gains)
+        self.translate = translate_controllers(self.gains)
 
     @classmethod
     def connect(
@@ -129,6 +132,39 @@ class Pilot:
             path.waypoints,
             self.gains,
             self.nav,
+            recorder=self.recorder,
+            announce=self.announce,
+            name=name,
+        )
+        res.path = path
+        return res
+
+    def move_to(self, xz: tuple[float, float], *, name: str = "move") -> NavResult:
+        """視点を変えずに xz へ並進する。壁回避は goto と同じ plan_path が担う。
+
+        進行方向へ視点を回さない点だけが goto と違う。前後+横移動で経路を追うので、
+        経路が横方向に大きく曲がると goto より遅い(strafe が前進より遅いため)。
+        """
+        pose = self.reader.get_latest()
+        if pose is None:
+            self.announce(f"  [{name}] 現在位置が取れません(HUD?)")
+            return NavResult(False, False, "no_pose", None, 0.0, 0)
+        start = (pose.position[0], pose.position[2])
+        path = plan_path(self.grid, start, xz)
+        if path is None:
+            self.announce(f"  [{name}] 経路なし(到達不能)")
+            return NavResult(False, False, "unreachable", None, 0.0, 0)
+        self.announce(
+            f"  [{name}] 経路 {len(path.waypoints)}点 / {path.length:.1f}m (視点固定)"
+            + ("(壁面→最寄り床へ)" if path.goal_blocked else "")
+        )
+        res = follow_path_hold_view(
+            self.reader,
+            self.look,
+            self.move,
+            path.waypoints,
+            self.gains,
+            self.translate,
             recorder=self.recorder,
             announce=self.announce,
             name=name,

@@ -144,7 +144,7 @@ def _add_gain_args(parser) -> None:
     parser.add_argument(
         "--face-timeout", type=float, default=d.face_timeout, help="正対の打切り秒"
     )
-    # 正対(face)の yaw: 視点軸は約0.55以下がほとんど反応しないので out_deadzone で飛び越える(OSC用)。
+    # 正対(face)の yaw: 視点軸は0.50以下が反応しないので out_deadzone で飛び越える(OSC用)。
     parser.add_argument("--turn-kp", type=float, default=d.turn_kp)
     parser.add_argument("--turn-ki", type=float, default=d.turn_ki)
     parser.add_argument("--turn-kd", type=float, default=d.turn_kd)
@@ -161,6 +161,13 @@ def _add_gain_args(parser) -> None:
     parser.add_argument("--nav-turn-kp", type=float, default=d.nav_turn_kp)
     parser.add_argument("--nav-turn-ki", type=float, default=d.nav_turn_ki)
     parser.add_argument("--nav-turn-kd", type=float, default=d.nav_turn_kd)
+    # 視点固定の並進(move_to): 進行方向へ回さず前後+横で経路を追う。誤差=残距離[m]。
+    parser.add_argument("--hmove-kp", type=float, default=d.hmove_kp)
+    parser.add_argument("--hmove-ki", type=float, default=d.hmove_ki)
+    parser.add_argument("--hmove-kd", type=float, default=d.hmove_kd)
+    parser.add_argument(
+        "--hmove-ilim", type=float, default=d.hmove_ilim, help="並進積分項の絶対上限"
+    )
     parser.add_argument("--pitch-kp", type=float, default=d.pitch_kp)
     parser.add_argument("--pitch-ki", type=float, default=d.pitch_ki)
     parser.add_argument("--pitch-kd", type=float, default=d.pitch_kd)
