@@ -1,6 +1,6 @@
 import math
 import time
-from typing import Callable, Iterable
+from typing import Iterable
 
 from .actuator import LookActuator, MouseLookActuator, MoveActuator
 from .controller import (
@@ -34,7 +34,6 @@ class Pilot:
         *,
         gains: PatrolGains | None = None,
         recorder: Recorder | None = None,
-        announce: Callable[[str], None] | None = None,
         osc=None,
         owns_io: bool = False,
     ):
@@ -44,7 +43,6 @@ class Pilot:
         self.move = move
         self.gains = gains or PatrolGains()
         self.recorder = recorder or NullRecorder()
-        self.announce = announce or (lambda _m: None)
         self._osc = osc
         self._owns_io = owns_io
         self.nav = nav_controllers(self.gains)
@@ -55,30 +53,15 @@ class Pilot:
     @classmethod
     def connect(
         cls,
-        map_path=None,
+        grid: NavGrid,
         *,
-        grid: NavGrid | None = None,
-        cell: float = 0.1,
-        radius: float = 0.25,
-        gap_close: float = 0.3,
         gains: PatrolGains | None = None,
         look: str = "osc",
         mouse_yaw_gain: float = 40.0,
         mouse_pitch_gain: float = 40.0,
         recorder: Recorder | None = None,
-        announce: Callable[[str], None] | None = None,
     ) -> "Pilot":
-        if grid is None:
-            if map_path is None:
-                raise ValueError("map_path か grid のどちらかを指定してください")
-            from ..mapping.mapper import RoomMapper
-
-            grid = NavGrid.from_mapper(
-                RoomMapper.load(map_path),
-                cell=cell,
-                avatar_radius=radius,
-                gap_close=gap_close,
-            )
+        """実機 I/O(キャプチャ+OSC)を組んだ Pilot を作る(注入版は __init__)。"""
         from ..perception.capture import WindowsVRChatCapture
         from .osc import VRChatOSC
         from ..perception.reader import PoseReader
@@ -98,7 +81,6 @@ class Pilot:
             osc,
             gains=gains,
             recorder=recorder,
-            announce=announce,
             osc=osc,
             owns_io=True,
         )
@@ -114,14 +96,14 @@ class Pilot:
     def goto(self, xz: tuple[float, float], *, name: str = "goto") -> NavResult:
         pose = self.reader.get_latest()
         if pose is None:
-            self.announce(f"  [{name}] 現在位置が取れません(HUD?)")
+            print(f"  [{name}] 現在位置が取れません(HUD?)")
             return NavResult(False, False, "no_pose", None, 0.0, 0)
         start = (pose.position[0], pose.position[2])
         path = plan_path(self.grid, start, xz)
         if path is None:
-            self.announce(f"  [{name}] 経路なし(到達不能)")
+            print(f"  [{name}] 経路なし(到達不能)")
             return NavResult(False, False, "unreachable", None, 0.0, 0)
-        self.announce(
+        print(
             f"  [{name}] 経路 {len(path.waypoints)}点 / {path.length:.1f}m"
             + ("(壁面→最寄り床へ)" if path.goal_blocked else "")
         )
@@ -133,7 +115,6 @@ class Pilot:
             self.gains,
             self.nav,
             recorder=self.recorder,
-            announce=self.announce,
             name=name,
         )
         res.path = path
@@ -147,14 +128,14 @@ class Pilot:
         """
         pose = self.reader.get_latest()
         if pose is None:
-            self.announce(f"  [{name}] 現在位置が取れません(HUD?)")
+            print(f"  [{name}] 現在位置が取れません(HUD?)")
             return NavResult(False, False, "no_pose", None, 0.0, 0)
         start = (pose.position[0], pose.position[2])
         path = plan_path(self.grid, start, xz)
         if path is None:
-            self.announce(f"  [{name}] 経路なし(到達不能)")
+            print(f"  [{name}] 経路なし(到達不能)")
             return NavResult(False, False, "unreachable", None, 0.0, 0)
-        self.announce(
+        print(
             f"  [{name}] 経路 {len(path.waypoints)}点 / {path.length:.1f}m (視点固定)"
             + ("(壁面→最寄り床へ)" if path.goal_blocked else "")
         )
@@ -166,7 +147,6 @@ class Pilot:
             self.gains,
             self.translate,
             recorder=self.recorder,
-            announce=self.announce,
             name=name,
         )
         res.path = path
@@ -183,7 +163,6 @@ class Pilot:
             self.gains,
             self.nav,
             recorder=self.recorder,
-            announce=self.announce,
             name=name,
         )
 
@@ -251,13 +230,13 @@ class Pilot:
         if not nav.reached:
             return nav, None
         aim = self.aim(xyz, name=name)
-        self.announce(
+        print(
             f"  [{name}] arrived. aim yaw_err={aim.yaw_err:+.2f}° "
             f"pitch_err={aim.pitch_err:+.2f}° ({aim.reason})"
         )
         if self.gains.align_tol > 0.0:
             aim = self.align(xyz, name=name)
-            self.announce(
+            print(
                 f"  [{name}] align yaw_err={aim.yaw_err:+.2f}° "
                 f"pitch_err={aim.pitch_err:+.2f}° ({aim.reason})"
             )

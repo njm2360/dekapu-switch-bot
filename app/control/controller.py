@@ -77,8 +77,8 @@ class FaceControllers:
 class PatrolGains:
     """巡回制御のチューニング定数一式(既定値はここに集約)。
 
-    既定値は同定プラント(plant.json)上の自律探索(sim-face 相当)で調整した暫定値。
-    実機(patrol-buttons)で答え合わせして更新すること(gain-tuning.md 参照)。
+    既定値は同定プラント(plant.json)上で全フェーズの制御ループを回して検証した値
+    (根拠は gain-tuning.md「既定値の由来」)。実機で答え合わせして更新すること。
     """
 
     # ---- 移動・到達 ----
@@ -97,10 +97,8 @@ class PatrolGains:
     nav_turn_kd: float = 0.004
     # ---- 視点固定の並進(hold-view move): 進行方向へ回さず forward/strafe を体フレームで
     #      合成して経路を追う。誤差=目標までの残距離[m]の体フレーム成分。指令上限は speed。 ----
-    hmove_kp: float = (
-        1.0  # 同定プラント検証: 0.31未満は不感帯で失速、3以上で振動。~2まで無振動
-    )
-    hmove_ki: float = 0.0  # 定常外乱が無ければ0(入れると斜め移動で微小な行き過ぎが出る)
+    hmove_kp: float = 1.0  # 安全域 0.31〜約2(下は不感帯で失速、上は振動)
+    hmove_ki: float = 0.0  # 定常外乱が無ければ0(入れると斜めで微小な行き過ぎ)
     hmove_kd: float = 0.1
     hmove_ilim: float = 0.3
     # ---- 前進速度(最終ウェイポイントの減速): 誤差=距離[m] ----
@@ -112,17 +110,13 @@ class PatrolGains:
     turn_ki: float = 0.005
     turn_kd: float = 0.0
     turn_ilim: float = 0.5  # yaw積分項の絶対上限
-    turn_deadzone: float = (
-        0.50  # 視点軸の不感帯補償(反応しない範囲=実測オンセット。0で無効)
-    )
+    turn_deadzone: float = 0.50
     # ---- 正対(face)の pitch: pitch 軸にも不感帯(0.10)があるので補償する。kd=0 は yaw と同じ理由 ----
     pitch_kp: float = 0.07
     pitch_ki: float = 0.008
     pitch_kd: float = 0.0
     pitch_ilim: float = 0.5
-    pitch_deadzone: float = (
-        0.10  # 実測オンセット。0=無効だと tol 直上で止まり未収束することがある
-    )
+    pitch_deadzone: float = 0.10
     # ---- 最終照準(align): 視点は回さず横移動で詰める ----
     align_tol: float = 0.02  # 横ずれの収束閾値[m]。0で align 無効
     align_timeout: float = 8.0  # 打切り秒
@@ -132,8 +126,7 @@ class PatrolGains:
     strafe_ki: float = 0.8
     strafe_kd: float = 0.1  # 0.2だとむだ時間増加時に不感帯ブーストと結合してチャタる
     strafe_ilim: float = 0.3  # 積分項の絶対上限
-    strafe_deadzone: float = 0.10  # 移動軸の実測オンセット。0だと kp·align_tol=0.08 が
-    #                                不感帯未満で tol 手前失速→stuck 打切りになる
+    strafe_deadzone: float = 0.10
 
 
 def nav_controllers(g: PatrolGains) -> NavControllers:

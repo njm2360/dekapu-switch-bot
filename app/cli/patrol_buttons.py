@@ -93,13 +93,12 @@ def _run_live(grid, targets, args, gains: PatrolGains) -> None:
     print(f"control log: {log_path}")
 
     pilot = Pilot.connect(
-        grid=grid,
+        grid,
         gains=gains,
         look=args.look,
         mouse_yaw_gain=args.mouse_yaw_gain,
         mouse_pitch_gain=args.mouse_pitch_gain,
         recorder=log,
-        announce=print,
     )
     print(f"look={args.look}  waiting for HUD...")
     pilot.wait_for_hud()

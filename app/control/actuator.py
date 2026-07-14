@@ -83,29 +83,19 @@ class MouseLookActuator:
 
 
 class MouseClickActuator:
-    """pydirectinput の左クリックで interact する InteractActuator。
+    """pydirectinput の左クリックで interact する InteractActuator。"""
 
-    ``press``/``release``/``click`` を差し替えるとテストできる
-    (既定は ``pydirectinput`` の同名関数)。
-    """
+    def __init__(self):
+        import pydirectinput
 
-    def __init__(self, press=None, release=None, click=None):
-        if press is None or release is None or click is None:
-            import pydirectinput
-
-            pydirectinput.PAUSE = 0.0
-            press = press or pydirectinput.mouseDown
-            release = release or pydirectinput.mouseUp
-            click = click or pydirectinput.click
-        self._press = press
-        self._release = release
-        self._click = click
+        pydirectinput.PAUSE = 0.0
+        self._pdi = pydirectinput
 
     def press(self) -> None:
-        self._press()
+        self._pdi.mouseDown()
 
     def release(self) -> None:
-        self._release()
+        self._pdi.mouseUp()
 
     def click(self) -> None:
-        self._click()
+        self._pdi.click()

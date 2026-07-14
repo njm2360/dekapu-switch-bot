@@ -2,9 +2,9 @@ import csv
 
 FIELDS = [
     "t",  # 開始からの経過秒
-    "phase",  # nav / face / align
+    "phase",  # nav / move / face / turn / align
     "target",  # ターゲット名
-    "wp",  # 追従中のウェイポイント番号(navのみ)
+    "wp",  # 追従中のウェイポイント番号(nav/moveのみ)
     "dt",  # 前フレームからの実経過秒
     "x",
     "y",
@@ -18,6 +18,8 @@ FIELDS = [
     "yaw_err",
     "pitch_err",
     "lat_err",  # 横方向誤差[m](alignのみ。+なら目標が右)
+    "fwd_err",  # 目標までの前方距離[m](moveのみ)
+    "right_err",  # 目標までの右方距離[m](moveのみ)
     "turn_p",
     "turn_i",
     "turn_d",

@@ -1,8 +1,9 @@
 """誘導を構成する制御ループ部品(1フェーズ=1関数)。
 
 実機 I/O には依存せず、PoseSource / LookActuator / MoveActuator の抽象だけで
-動く(ヘッドレスでテスト可能)。follow_path は体の移動追従、aim_at / turn_to は
-視点合わせ。経路計画やフェーズの連結は pilot.Pilot が担う。
+動く(ヘッドレスでテスト可能)。follow_path / follow_path_hold_view は体の移動追従
+(後者は視点を回さない)、aim_at / turn_to は視点合わせ、strafe_align は横移動での
+最終照準。経路計画やフェーズの連結は pilot.Pilot が担う。
 """
 
 import math
@@ -92,12 +93,10 @@ def follow_path(
     *,
     clock: Clock = time,
     recorder: Recorder | None = None,
-    announce: Callable[[str], None] | None = None,
     name: str = "",
 ) -> NavResult:
     rec = recorder or NullRecorder()
     track = not isinstance(rec, NullRecorder)
-    say = announce or (lambda _m: None)
     wps = list(waypoints)
     if not wps:
         return NavResult(True, True, "arrived", None, 0.0, 0)
@@ -115,7 +114,7 @@ def follow_path(
             pose, dt, now = _next_frame(reader, last_t, last_time, clock=clock)
             if pose is None:
                 reason = "hud_lost"
-                say(f"  [{name}] HUD lost, abort nav")
+                print(f"  [{name}] HUD lost, abort nav")
                 break
             last_t, last_time = pose.time_ms, now
             frames += 1
@@ -164,7 +163,7 @@ def follow_path(
                 yaw_acc.update(err, turn, now - t0, dt, gains.face_tol)
             if now - t0 > gains.nav_timeout:
                 reason = "timeout"
-                say(f"  [{name}] nav timeout")
+                print(f"  [{name}] nav timeout")
                 break
     finally:
         # 例外(Ctrl+C・OSC/マウスエラー等)で抜けてもアバターを確実に止める
@@ -191,12 +190,10 @@ def follow_path_hold_view(
     *,
     clock: Clock = time,
     recorder: Recorder | None = None,
-    announce: Callable[[str], None] | None = None,
     name: str = "",
 ) -> NavResult:
     rec = recorder or NullRecorder()
     track = not isinstance(rec, NullRecorder)
-    say = announce or (lambda _m: None)
     wps = list(waypoints)
     if not wps:
         return NavResult(True, True, "arrived", None, 0.0, 0)
@@ -213,7 +210,7 @@ def follow_path_hold_view(
             pose, dt, now = _next_frame(reader, last_t, last_time, clock=clock)
             if pose is None:
                 reason = "hud_lost"
-                say(f"  [{name}] HUD lost, abort move")
+                print(f"  [{name}] HUD lost, abort move")
                 break
             last_t, last_time = pose.time_ms, now
             frames += 1
@@ -265,7 +262,7 @@ def follow_path_hold_view(
                 )
             if now - t0 > gains.nav_timeout:
                 reason = "timeout"
-                say(f"  [{name}] move timeout")
+                print(f"  [{name}] move timeout")
                 break
     finally:
         # 例外で抜けても移動・視点を確実に止める

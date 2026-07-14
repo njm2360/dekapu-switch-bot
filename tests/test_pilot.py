@@ -105,7 +105,7 @@ def test_follow_path_arrives_when_already_at_goal():
 
 def test_follow_path_scripted_walk_records_and_commands():
     g = _gains(arrive=0.35)
-    # +Z へ直進する体を再現(最後は最終WP上=到達)
+    # +Z へ進んでいく位置系列(最後は最終WP上=到達)
     poses = [
         _pose(i + 1, (0.0, 1.6, z)) for i, z in enumerate([0.0, 0.5, 1.0, 1.5, 2.0])
     ]
