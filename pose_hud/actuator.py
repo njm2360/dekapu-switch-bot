@@ -1,8 +1,8 @@
 """操作アクチュエータ: 視点(look)と移動(move)を独立に差し替えるための IF。
 
 制御ループは LookActuator / MoveActuator へ指令値 [-1,1] を出すだけで、実際の注入方法
-(OSC / DirectInput)は実装側が吸収する。look と move は別プロトコルなので、視点だけ
-マウス注入・移動は OSC、のように片方だけ差し替えられる。
+(OSC / DirectInput)は実装側が吸収する。look と move は別プロトコルなので、視点は
+マウス・移動は OSC、のように片方だけ差し替えられる。
 
 VRChat の HUD 表示切替(`/avatar/parameters/HUD_Enable`)はアクチュエータではなく OSC
 固有の操作なので、ここには含めない(`osc.VRChatOSC.hud_enable` を使う)。
@@ -31,7 +31,8 @@ class MoveActuator(Protocol):
 class MouseLookActuator:
     """DirectInput(相対マウス移動)で視点を操作する LookActuator。
 
-    制御指令 [-1,1] を、1フレームあたりのマウス移動量[px]へ線形に変換する(速度的な扱い)。
+    制御指令 [-1,1] を、1フレームあたりのマウス移動量[px]へ線形に変換する
+    (実質的には速度指令として働く)。
     VRChat デスクトップのマウス視点は加速なしが前提。操作するにはウィンドウに
     フォーカスが必要。マウスには OSC の視点軸のような不感帯が無いので、PID の
     out_deadzone は 0 でよい(ゲイン[px/指令]は OSC 版とは別物。実機で要校正)。

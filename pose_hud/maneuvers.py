@@ -1,4 +1,4 @@
-"""誘導の建物ブロック(1フェーズ=1関数の制御ループ)。
+"""誘導を構成する制御ループ部品(1フェーズ=1関数)。
 
 実機 I/O には依存せず、PoseSource / LookActuator / MoveActuator の抽象だけで
 動く(ヘッドレスでテスト可能)。follow_path は体の移動追従、aim_at / turn_to は

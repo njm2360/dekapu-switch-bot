@@ -2,12 +2,13 @@
 
 probe: 1軸に階段状の指令列(ProbeSegment)を注入し、HUD ポーズ時系列を記録する。
 identify: 記録から「指令→定常速度」の静特性・むだ時間・フレーム間隔 dt 列を
-抽出して AxisModel / PlantModel(JSON 保存可)に固める。simplant.SimulatedVRChat
+抽出して AxisModel / PlantModel(JSON 保存可)にまとめる。simplant.SimulatedVRChat
 がこのモデルを積分すると、実機なしでゲイン検証できるプラントになる。
 
-run_axis_probe は PoseSource と send コールバック(+時計)の抽象しか触らない
-ので、模擬プラント+模擬時計を注入すればヘッドレスでも走る(tests/test_sysid.py
-が「既知の合成プラント → プローブ → 同定 → 一致」を往復検証している)。
+run_axis_probe は PoseSource と send コールバック(+クロック)の抽象にしか
+依存しないので、模擬プラントと模擬クロックを渡せばヘッドレスでも走る
+(tests/test_sysid.py では、特性が既知の合成プラントをプローブ → 同定して、
+元の特性と一致することを確認している)。
 
 むだ時間は OSC→ゲーム反映→描画→キャプチャ→デコードの合計、つまり制御器から
 見えるループ遅延そのものを測る(センサ経路が本番と同一なため)。同定するのは
@@ -60,7 +61,7 @@ class ProbeSegment:
 class ProbeSample:
     seg: int  # セグメント番号
     cmd: float  # そのセグメントの指令値
-    t: float  # プローブ開始からの受信秒(壁時計)
+    t: float  # プローブ開始からの受信秒(実時間)
     time_ms: int
     x: float
     y: float
@@ -116,7 +117,7 @@ def schedule_duration(segments: list[ProbeSegment]) -> float:
 
 
 class _ProbeRecorder:
-    """セグメント実行と記録の共有コア(時計と停止条件を注入できる)。"""
+    """セグメント実行と記録の共有コア(クロックと停止条件を注入できる)。"""
 
     def __init__(
         self,
@@ -244,9 +245,9 @@ def run_move_probe(
 ) -> ProbeRun:
     """移動軸(forward/strafe)の省スペースプローブ。
 
-    開始位置(ホーム)から軸方向 ±max_travel の帯の中で往復して測る。位置
-    ガードで指令を切り返すので、移動速度が未知でも行動範囲は帯+行き過ぎ
-    マージン(≒ 最高速度×むだ時間)に収まる。各レベルで passes 回往復して
+    開始位置(ホーム)から軸方向 ±max_travel の範囲内で往復して測る。位置
+    ガードで指令を切り返すので、移動速度が未知でも実際の移動範囲は ±max_travel
+    +行き過ぎマージン(≒ 最高速度×むだ時間)に収まる。各レベルで passes 回往復して
     サンプルを稼ぎ、最後にホームへ戻してから次のレベルへ移る。
 
     切り返し直後はむだ時間ぶん逆向きに動いているため、identify_axis はセグメント
@@ -315,8 +316,8 @@ def _responses(samples: list[ProbeSample], axis: str) -> np.ndarray:
     """サンプル列の応答量(先頭サンプル基準の相対値)。
 
     yaw は最短回りで unwrap。移動軸は先頭サンプル時点の体の向きを基準に、
-    前方向(forward)/右方向(strafe)へ変位を射影する(VRChat の +Horizontal
-    が左だった場合は速度が負として写るだけで、モデルとしては一貫する)。
+    前方向(forward)/右方向(strafe)へ変位を射影する(仮に VRChat の +Horizontal
+    が左向きだった場合は速度が負になるだけで、モデルとしては一貫する)。
     """
     if axis == "yaw":
         yaws = [s.yaw for s in samples]

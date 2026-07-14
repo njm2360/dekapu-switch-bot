@@ -1,6 +1,6 @@
 """システム同定パイプラインの往復テスト。
 
-既知の合成プラント(SimulatedVRChat)に模擬時計でプローブをかけ、同定結果が
+既知の合成プラント(SimulatedVRChat)に模擬クロックでプローブをかけ、同定結果が
 元の特性(静特性カーブ・むだ時間)と一致することを実機なしで検証する。
 """
 
@@ -18,7 +18,6 @@ from pose_hud.simplant import SimulatedVRChat
 from pose_hud.sysid import (
     AxisModel,
     PlantModel,
-    build_plant,
     extract_dts,
     identify_axis,
     load_run,
@@ -32,9 +31,13 @@ from pose_hud.telemetry import ListRecorder
 
 # VRChat 視点軸ふうの静特性: 0.55 以下はごく遅く、超えると急峻に立ち上がる
 YAW_CURVE = [
-    (-1.0, -90.0), (-0.6, -25.0), (-0.55, -1.2),
+    (-1.0, -90.0),
+    (-0.6, -25.0),
+    (-0.55, -1.2),
     (0.0, 0.0),
-    (0.55, 1.2), (0.6, 25.0), (1.0, 90.0),
+    (0.55, 1.2),
+    (0.6, 25.0),
+    (1.0, 90.0),
 ]
 PITCH_CURVE = [(-1.0, -60.0), (0.0, 0.0), (1.0, 60.0)]
 MOVE_CURVE = [(-1.0, -2.0), (0.0, 0.0), (1.0, 2.0)]
@@ -55,7 +58,7 @@ def make_plant(dead: float = DEAD, dt: float = DT) -> PlantModel:
 
 
 class SimClock:
-    """SimulatedVRChat をフレーム境界で進める模擬時計(実時間なしでプローブを回す)。"""
+    """SimulatedVRChat をフレーム境界で進める模擬クロック(実時間なしでプローブを回す)。"""
 
     def __init__(self, sim: SimulatedVRChat):
         self.sim = sim
@@ -88,14 +91,16 @@ def probe(sim: SimulatedVRChat, axis: str, segments):
 def test_yaw_static_curve_roundtrip():
     plant = make_plant()
     sim = SimulatedVRChat(plant)
-    run = probe(sim, "yaw", look_schedule([0.3, 0.5, 0.55, 0.6, 0.8, 1.0], hold=1.0, settle=0.4))
+    run = probe(
+        sim, "yaw", look_schedule([0.3, 0.5, 0.55, 0.6, 0.8, 1.0], hold=1.0, settle=0.4)
+    )
     model = identify_axis(run)
     assert model.unit == "deg/s"
     # プローブしたレベル(両符号)で元のカーブと一致する
     for cmd in (0.3, 0.5, 0.55, 0.6, 0.8, 1.0, -0.3, -0.55, -0.8, -1.0):
         true = plant.axes["yaw"].rate(cmd)
         assert model.rate(cmd) == pytest.approx(true, rel=0.05, abs=0.2)
-    # 不感帯の折れ点(0.55→0.6 の急峻な立ち上がり)が写っている
+    # 不感帯の折れ点(0.55→0.6 の急峻な立ち上がり)が再現されている
     assert abs(model.rate(0.55)) < 3.0
     assert model.rate(0.6) > 15.0
 
@@ -121,7 +126,7 @@ def test_movement_projection_independent_of_heading():
 
 
 def test_move_probe_stays_within_band():
-    """省スペース移動プローブ: 位置ガードで行動範囲が帯+むだ時間マージンに収まる。"""
+    """省スペース移動プローブ: 位置ガードで移動範囲が ±max_travel+むだ時間マージンに収まる。"""
     plant = make_plant()  # 最高 2 m/s, むだ時間 0.1s
     sim = SimulatedVRChat(plant, yaw=20.0)
     clk = SimClock(sim)
@@ -135,7 +140,7 @@ def test_move_probe_stays_within_band():
         monotonic=clk.monotonic,
         sleep=clk.sleep,
     )
-    # ホーム(最初のサンプル位置)からの右方向変位が帯を大きく超えない。
+    # ホーム(最初のサンプル位置)からの右方向変位が ±max_travel を大きく超えない。
     # 行き過ぎ上限 ≒ 最高速度 × (むだ時間 + 2フレーム)
     yr = math.radians(run.samples[0].yaw)
     dx, dz = math.cos(yr), -math.sin(yr)
@@ -145,7 +150,7 @@ def test_move_probe_stays_within_band():
     assert max(abs(p) for p in projs) <= max_travel + margin
     # 終了時はホーム近くに戻っている
     assert abs(projs[-1]) < 0.15
-    # 静特性は帯内の短い往復からでも復元できる
+    # 静特性は範囲内の短い往復からでも復元できる
     model = identify_axis(run)
     assert model.rate(1.0) == pytest.approx(2.0, rel=0.1)
     assert model.rate(0.5) == pytest.approx(1.0, rel=0.1)
@@ -162,7 +167,11 @@ def test_all_control_loops_run_against_sim():
             sim, sim, sim, [(0.0, 0.0), (0.0, 1.5)], gains, nav_controllers(gains)
         )
         aim = aim_at(
-            sim, sim, (1.0, 1.5, 4.0), gains, face_controllers(gains),
+            sim,
+            sim,
+            (1.0, 1.5, 4.0),
+            gains,
+            face_controllers(gains),
             recorder=ListRecorder(),
         )
     finally:

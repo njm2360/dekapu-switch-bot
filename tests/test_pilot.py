@@ -1,8 +1,8 @@
 """Pilot 誘導エンジンのテスト。
 
 実機(VRChat/OSC/キャプチャ)なしで、注入した fake reader・記録アクチュエータだけで
-建物ブロック(follow_path / aim_at)と Pilot の分岐を検証する。入出力が切れていて
-ヘッドレスでテストできることの担保でもある。
+制御ループ部品(follow_path / aim_at)と Pilot の分岐を検証する。実機 I/O から
+切り離されていてヘッドレスでテストできることの担保でもある。
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ def _pose(t: int, pos, yaw_deg: float = 0.0, pitch_deg: float = 0.0) -> Pose:
 
 
 class FakeReader:
-    """スクリプトしたポーズ列を time_ms 昇順で返す(尽きたら最後を保持)。"""
+    """あらかじめ用意したポーズ列を time_ms 昇順で返す(尽きたら最後を保持)。"""
 
     def __init__(self, poses):
         self._poses = list(poses)
@@ -94,13 +94,21 @@ def test_follow_path_arrives_when_already_at_goal():
 def test_follow_path_scripted_walk_records_and_commands():
     g = _gains(arrive=0.35)
     # +Z へ直進する体を再現(最後は最終WP上=到達)
-    poses = [_pose(i + 1, (0.0, 1.6, z)) for i, z in enumerate([0.0, 0.5, 1.0, 1.5, 2.0])]
+    poses = [
+        _pose(i + 1, (0.0, 1.6, z)) for i, z in enumerate([0.0, 0.5, 1.0, 1.5, 2.0])
+    ]
     reader = FakeReader(poses)
     look, move = RecActuator(), RecActuator()
     rec = ListRec()
     res = follow_path(
-        reader, look, move, [(0.0, 0.0), (0.0, 1.0), (0.0, 2.0)],
-        g, nav_controllers(g), recorder=rec, name="walk",
+        reader,
+        look,
+        move,
+        [(0.0, 0.0), (0.0, 1.0), (0.0, 2.0)],
+        g,
+        nav_controllers(g),
+        recorder=rec,
+        name="walk",
     )
     assert res.arrived
     assert res.frames >= 4
@@ -157,7 +165,9 @@ def test_turn_to_pitch_none_leaves_pitch_metrics_none():
     g = _gains(settle=3, face_tol=1.0)
     reader = FakeReader([_pose(i + 1, (0.0, 1.0, 0.0), yaw_deg=90.0) for i in range(5)])
     # recorder を渡した時だけ指標が付く
-    res = turn_to(reader, RecActuator(), 90.0, g, face_controllers(g), recorder=ListRec())
+    res = turn_to(
+        reader, RecActuator(), 90.0, g, face_controllers(g), recorder=ListRec()
+    )
     assert isinstance(res.yaw, AxisMetrics)
     assert res.pitch is None  # pitch 未制御なら指標も None
 
@@ -174,10 +184,14 @@ def test_metrics_only_when_recorder_attached():
 
 def test_metrics_populated_and_scorable():
     g = _gains(settle=3, face_tol=1.0)
-    # yaw を +30°→0° へ寄せる(誤差が減っていく)スクリプト。整定して収束
+    # yaw を +30°→0° へ寄せる(誤差が減っていく)ポーズ列。整定して収束する
     yaws = [30.0, 18.0, 8.0, 2.0, 0.3, 0.2, 0.1]
-    reader = FakeReader([_pose(i + 1, (0.0, 1.0, 0.0), yaw_deg=y) for i, y in enumerate(yaws)])
-    res = turn_to(reader, RecActuator(), 0.0, g, face_controllers(g), recorder=ListRec())
+    reader = FakeReader(
+        [_pose(i + 1, (0.0, 1.0, 0.0), yaw_deg=y) for i, y in enumerate(yaws)]
+    )
+    res = turn_to(
+        reader, RecActuator(), 0.0, g, face_controllers(g), recorder=ListRec()
+    )
     m = res.yaw
     assert isinstance(m, AxisMetrics)
     assert m.iae > 0.0 and m.itae >= 0.0  # 誤差の積分が貯まる
@@ -190,10 +204,16 @@ def test_metrics_populated_and_scorable():
 
 def test_follow_path_exposes_yaw_metrics():
     g = _gains(arrive=0.35)
-    poses = [_pose(i + 1, (0.0, 1.6, z)) for i, z in enumerate([0.0, 0.5, 1.0, 1.5, 2.0])]
+    poses = [
+        _pose(i + 1, (0.0, 1.6, z)) for i, z in enumerate([0.0, 0.5, 1.0, 1.5, 2.0])
+    ]
     res = follow_path(
-        FakeReader(poses), RecActuator(), RecActuator(),
-        [(0.0, 0.0), (0.0, 1.0), (0.0, 2.0)], g, nav_controllers(g),
+        FakeReader(poses),
+        RecActuator(),
+        RecActuator(),
+        [(0.0, 0.0), (0.0, 1.0), (0.0, 2.0)],
+        g,
+        nav_controllers(g),
         recorder=ListRec(),
     )
     assert isinstance(res.yaw, AxisMetrics)
@@ -216,7 +236,9 @@ def _grid(free: np.ndarray) -> NavGrid:
 
 def test_pilot_goto_no_pose():
     # HUD からポーズが取れない → no_pose で即返る(実機不要)
-    pilot = Pilot(_grid(np.ones((10, 10), bool)), FakeReader([]), RecActuator(), RecActuator())
+    pilot = Pilot(
+        _grid(np.ones((10, 10), bool)), FakeReader([]), RecActuator(), RecActuator()
+    )
     res = pilot.goto((0.5, 0.5))
     assert not res.reached and res.reason == "no_pose"
 
@@ -226,7 +248,8 @@ def test_pilot_goto_unreachable():
     pilot = Pilot(
         _grid(np.zeros((10, 10), bool)),
         FakeReader([_pose(1, (0.5, 1.6, 0.5))]),
-        RecActuator(), RecActuator(),
+        RecActuator(),
+        RecActuator(),
     )
     res = pilot.goto((0.9, 0.9))
     assert not res.reached and res.reason == "unreachable"
@@ -237,7 +260,8 @@ def test_pilot_is_usable_without_hardware_imports():
     pilot = Pilot(
         _grid(np.ones((10, 10), bool)),
         FakeReader([_pose(1, (0.5, 1.6, 0.5))]),
-        RecActuator(), RecActuator(),
+        RecActuator(),
+        RecActuator(),
     )
     assert pilot._owns_io is False
     res = pilot.goto((0.5, 0.5))  # start≈goal なのですぐ到達

@@ -1,9 +1,9 @@
-"""フィードバック制御器のユニット化(注入用)。
+"""フィードバック制御器(制御ループへ注入する部品)。
 
 制御ループは AxisController に (誤差, dt) を渡して指令 [-1,1] を得るだけ。PID の
 ゲインや不感帯補償はここに閉じ込め、アクチュエータに合わせて差し替え・再調整する。
 
-``PatrolGains`` が巡回制御の全チューニング定数の単一の出所。CLI はこの既定値を
+巡回制御のチューニング定数はすべて ``PatrolGains`` に集約する。CLI はこの既定値を
 上書きするだけにして、数値の二重管理を避ける。
 """
 
@@ -67,7 +67,7 @@ class FaceControllers:
 
 @dataclass
 class PatrolGains:
-    """巡回制御のチューニング定数一式(制御則の既定値の単一の出所)。"""
+    """巡回制御のチューニング定数一式(既定値はここに集約)。"""
 
     # ---- 追従パラメータ ----
     speed: float = 0.7  # 巡航前進速度の上限(0..1)
@@ -101,8 +101,14 @@ def nav_controllers(g: PatrolGains) -> NavControllers:
     """移動追従用の制御器を組む。yaw は不感帯補償なし(連続追従では小さい指令が
     自然な遊びとして働き、暴れを防ぐ)。"""
     yaw = AxisController(
-        PID(kp=g.nav_turn_kp, ki=g.nav_turn_ki, kd=g.nav_turn_kd,
-            out_min=-1.0, out_max=1.0, i_limit=0.5)
+        PID(
+            kp=g.nav_turn_kp,
+            ki=g.nav_turn_ki,
+            kd=g.nav_turn_kd,
+            out_min=-1.0,
+            out_max=1.0,
+            i_limit=0.5,
+        )
     )
     forward = AxisController(
         PID(kp=g.fwd_kp, ki=0.0, kd=g.fwd_kd, out_min=0.0, out_max=g.speed, i_limit=0.0)
@@ -113,13 +119,27 @@ def nav_controllers(g: PatrolGains) -> NavControllers:
 def face_controllers(g: PatrolGains) -> FaceControllers:
     """正対用の制御器を組む。yaw/pitch とも誤差が tol 未満なら指令0。yaw は不感帯補償つき。"""
     yaw = AxisController(
-        PID(kp=g.turn_kp, ki=g.turn_ki, kd=g.turn_kd,
-            out_min=-1.0, out_max=1.0, i_limit=g.turn_ilim, out_deadzone=g.turn_deadzone),
+        PID(
+            kp=g.turn_kp,
+            ki=g.turn_ki,
+            kd=g.turn_kd,
+            out_min=-1.0,
+            out_max=1.0,
+            i_limit=g.turn_ilim,
+            out_deadzone=g.turn_deadzone,
+        ),
         tol=g.face_tol,
     )
     pitch = AxisController(
-        PID(kp=g.pitch_kp, ki=g.pitch_ki, kd=g.pitch_kd,
-            out_min=-1.0, out_max=1.0, i_limit=g.pitch_ilim, out_deadzone=g.pitch_deadzone),
+        PID(
+            kp=g.pitch_kp,
+            ki=g.pitch_ki,
+            kd=g.pitch_kd,
+            out_min=-1.0,
+            out_max=1.0,
+            i_limit=g.pitch_ilim,
+            out_deadzone=g.pitch_deadzone,
+        ),
         tol=g.face_tol,
     )
     return FaceControllers(yaw=yaw, pitch=pitch)

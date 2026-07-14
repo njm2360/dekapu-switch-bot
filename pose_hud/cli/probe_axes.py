@@ -1,17 +1,17 @@
-"""実機プローブ CLI: VRChat の各入力軸の応答特性を測って PlantModel に固める。
+"""実機プローブ CLI: VRChat の各入力軸の応答特性を測って PlantModel にまとめる。
 
 使い方(実機。開けた場所に立って実行):
     probe-axes                        # 4軸すべて測定 → logs/probe_*/plant.json
     probe-axes --axes yaw,strafe      # 軸を絞る
 
-出力ディレクトリには生記録 CSV(probe_*.csv / segments_*.csv)、同定結果
-plant.json、軸ごとの静特性プロット PNG が入る。生記録さえあれば
+出力ディレクトリには生ログ CSV(probe_*.csv / segments_*.csv)、同定結果
+plant.json、軸ごとの静特性プロット PNG が入る。生ログさえあれば
     probe-axes --from-log logs/probe_XXXX
 で(実機なしで)同定だけやり直せる。plant.json は sim-face が読む。
 
 必要スペース:
 - yaw / pitch はその場で回るだけ(スペース不要)。
-- forward / strafe は開始位置から軸方向 ±max-travel(既定 3m)の帯内で往復する
+- forward / strafe は開始位置から軸方向 ±max-travel(既定 3m)の範囲内で往復する
   (位置ガードで切り返す。行き過ぎマージン ≒ 最高速度×むだ時間)。狭い場所では
   --max-travel 0.4 程度まで詰められる(速い指令レベルの精度は粗くなる)。
 
@@ -195,7 +195,7 @@ def main() -> None:
         "--from-log",
         metavar="DIR",
         default=None,
-        help="生記録 CSV から同定だけやり直す(実機不要)",
+        help="生ログ CSV から同定だけやり直す(実機不要)",
     )
     parser.add_argument("--levels", default=LOOK_LEVELS, help="視点軸の指令レベルCSV")
     parser.add_argument(
@@ -218,7 +218,7 @@ def main() -> None:
         "--max-travel",
         type=float,
         default=3,
-        help="移動軸プローブの往復帯の片側幅[m](狭い場所では小さく)",
+        help="移動軸プローブの往復範囲の片側幅[m](狭い場所では小さく)",
     )
     parser.add_argument(
         "--passes",
@@ -249,7 +249,7 @@ def main() -> None:
             except FileNotFoundError:
                 print(f"  [skip] {axis}: 記録なし")
         if not runs:
-            raise SystemExit(f"{src} に生記録(probe_*.csv)が見つかりません")
+            raise SystemExit(f"{src} に生ログ(probe_*.csv)が見つかりません")
         _identify_and_save(runs, out_dir, source="from-log", plot=not args.no_plot)
         return
 

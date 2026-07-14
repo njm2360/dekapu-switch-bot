@@ -30,7 +30,7 @@ VRChat 画面(HUDビットグリッド)
 ```
 
 制御ループ(patrol)は **アクチュエータ**(look / move)と **制御器**(AxisController)を注入で
-受け取る。視点だけ OSC→マウスに差し替える、といった単位の入れ替えができる。HUD 表示切替は
+受け取る。視点だけ OSC からマウスに差し替える、といった部品単位の入れ替えができる。HUD 表示切替は
 アクチュエータではなく OSC 固有操作(`VRChatOSC.hud_enable`)。
 
 ## モジュール(`pose_hud/`)
@@ -40,7 +40,7 @@ VRChat 画面(HUDビットグリッド)
 | モジュール          | 役割                                                                                   |
 | ------------------- | -------------------------------------------------------------------------------------- |
 | `spec.py`           | グリッド/プロトコルの確定定数(モジュール定数。シェーダーと一致)                        |
-| `pose.py`           | `Pose`(6DoF ドメイン型。全層が参照する中心の型)                                        |
+| `pose.py`           | `Pose`(6DoF ドメイン型。全層から参照される中核の型)                                    |
 | `decode.py`         | numpy ベクトル化デコード + 検証(`decode_pose`)                                         |
 | `encode.py`         | 合成エンコーダ(`render_pose`)。テスト用                                                |
 | `capture.py`        | Windows/VRChat ウィンドウキャプチャ(DPI対応、`FrameSource`)                            |
@@ -55,14 +55,18 @@ VRChat 画面(HUDビットグリッド)
 | `actuator.py`       | `LookActuator`/`MoveActuator` IF + `MouseLookActuator`(DirectInput)                    |
 | `osc.py`            | VRChat への OSC 送信(look/move/stop で両 actuator IF を満たす)                         |
 | `telemetry.py`      | `Recorder` IF + `AxisMetrics`/`AxisAccumulator`(応答指標の累積)                        |
-| `maneuvers.py`      | 制御ループの建物ブロック(`follow_path` / `aim_at` / `turn_to`。ヘッドレス可)           |
+| `maneuvers.py`      | 制御ループの部品(`follow_path` / `aim_at` / `turn_to`。ヘッドレスでも動く)             |
 | `pilot.py`          | `Pilot` ファサード(経路計画+ループ連結。実機 I/O は `connect()` に集約)                |
+| `sysid.py`          | システム同定(プローブ注入・静特性/むだ時間/dt 抽出・`PlantModel` JSON)                 |
+| `simplant.py`       | `SimulatedVRChat`(同定モデルを積分。PoseSource+両 Actuator を満たし制御ループに注入可) |
 
 ## CLI(`pose_hud/cli/`, console scripts)
 
-| コマンド         | スクリプト              | 用途                                                            |
-| ---------------- | ----------------------- | --------------------------------------------------------------- |
-| `decode-demo`    | `cli/decode_demo.py`    | HUD を読み取り 6DoF を表示(動作確認)                            |
-| `map-room`       | `cli/map_room.py`       | 壁沿いに歩いて部屋マップを記録(SPACE一時停止・日時フォルダ出力) |
-| `find-button`    | `cli/find_button.py`    | 複数地点からボタンを三角測量(SPACE/r/q)                         |
-| `patrol-buttons` | `cli/patrol_buttons.py` | マップ上でボタンを壁を避けて巡回(OSC + PID)                     |
+| コマンド         | スクリプト              | 用途                                                              |
+| ---------------- | ----------------------- | ----------------------------------------------------------------- |
+| `decode-demo`    | `cli/decode_demo.py`    | HUD を読み取り 6DoF を表示(動作確認)                              |
+| `map-room`       | `cli/map_room.py`       | 壁沿いに歩いて部屋マップを記録(SPACE一時停止・日時フォルダ出力)   |
+| `find-button`    | `cli/find_button.py`    | 複数地点からボタンを三角測量(SPACE/r/q)                           |
+| `patrol-buttons` | `cli/patrol_buttons.py` | マップ上でボタンを壁を避けて巡回(OSC + PID)                       |
+| `probe-axes`     | `cli/probe_axes.py`     | 入力軸の応答特性を測定し `plant.json` に同定(--from-log で再同定) |
+| `sim-face`       | `cli/sim_face.py`       | 同定プラント上で正対ループを回しゲインを検証(実機不要)            |

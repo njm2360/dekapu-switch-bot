@@ -1,8 +1,8 @@
 """制御の記録と応答指標(チューニング用)。
 
 Recorder はフレームごとの行の記録先(CSV 等)の抽象。AxisAccumulator は1軸の
-誤差・指令の列から IAE/ITAE などの応答指標を積み、snapshot() で AxisMetrics に
-固める。制御ループからは独立した純粋な計算で、recorder を付けたときだけ走る。
+誤差・指令の列から IAE/ITAE などの応答指標を積算し、snapshot() で AxisMetrics
+にまとめる。制御ループからは独立した純粋な計算で、recorder を付けたときだけ走る。
 """
 
 from dataclasses import dataclass
@@ -18,10 +18,20 @@ class NullRecorder:
         pass
 
 
+class ListRecorder:
+    """行を list[dict] に貯める Recorder(テスト・オフライン解析用)。"""
+
+    def __init__(self):
+        self.rows: list[dict] = []
+
+    def row(self, **kw) -> None:
+        self.rows.append(kw)
+
+
 @dataclass
 class AxisMetrics:
     iae: float  # Σ|e|·dt(全体誤差・定常偏差)
-    itae: float  # Σ t·|e|·dt(遅い収束ほど重く罰する)
+    itae: float  # Σ t·|e|·dt(収束が遅いほど大きくなる)
     effort: float  # Σ|cmd|·dt(制御量。小さいほど省エネ・滑らか)
     overshoot: float  # 0 を最初に跨いだ後の反対符号ピーク[誤差と同単位]
     peak_err: float  # |e| の最大

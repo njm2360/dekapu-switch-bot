@@ -1,7 +1,7 @@
 """パッケージ共通のドメイン型: 6DoF ポーズ。
 
-HUD デコード(decode)が生成し、mapping / triangulate / maneuvers など全層が
-消費する中心の型。座標系は Unity 準拠(Y-up, 左手系, 単位メートル)。
+HUD デコード(decode)が生成し、mapping / triangulate / maneuvers など全層で
+使われる中核の型。座標系は Unity 準拠(Y-up, 左手系, 単位メートル)。
 """
 
 import math
