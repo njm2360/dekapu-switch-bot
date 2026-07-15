@@ -439,43 +439,61 @@ def run_pitch_probe(
 # ---------------------------------------------------------------------------
 
 
-def _isotonic(rates: list[float]) -> list[float]:
-    """PAV(pool-adjacent-violators)で列を非減少に均す(等重み)。"""
-    # 各プールを [値の和, 個数] で持ち、隣接違反(左プール平均 > 右)を都度併合する
-    stack: list[list[float]] = []
-    for r in rates:
-        cur = [r, 1.0]
-        while stack and stack[-1][0] / stack[-1][1] > cur[0] / cur[1]:
-            prev = stack.pop()
-            cur = [prev[0] + cur[0], prev[1] + cur[1]]
-        stack.append(cur)
-    out: list[float] = []
-    for total, count in stack:
-        out.extend([total / count] * int(count))
-    return out
+def _median3(ys: list[float]) -> list[float]:
+    """3点メディアン平滑(両端は不変)。単調な区間(折れ点・平坦部含む)は
+    厳密に不変で、孤立した外れ値だけを隣の値に置き換える。"""
+    n = len(ys)
+    if n < 3:
+        return list(ys)
+    return [ys[0]] + [median(ys[i - 1 : i + 2]) for i in range(1, n - 1)] + [ys[-1]]
 
 
-def _monotonic_points(
-    points: list[tuple[float, float]], axis: str, source: str
+def _fix_endpoint(
+    x0: float, y0: float, x1: float, y1: float, x2: float, y2: float
+) -> float:
+    """端点の孤立外れ値補正。(x0,y0) が端点、(x1,y1)(x2,y2) は平滑済みの内側 2 点。
+
+    端点はメディアン窓が組めず最も外れ値が残りやすい。隣接間隔が同程度
+    (端まで一様なグリッド=同定が作る等間隔レベル)のときだけ、内側 2 点の
+    線形外挿・隣接値・生値の中央値を取る(線形に伸びる端は不変)。間隔が不揃いな
+    粗いカーブでは外挿を信用できない(ニー直後の端点を壊す)ので生値のまま返す。
+    """
+    d1, d2 = abs(x1 - x0), abs(x2 - x1)
+    if d2 <= 0.0 or not (0.8 <= d1 / d2 <= 1.25):
+        return y0
+    pred = y1 + (y1 - y2) * (d1 / d2)
+    return median([y0, y1, pred])
+
+
+def _denoise_points(
+    points: list[tuple[float, float]], axis: str
 ) -> list[tuple[float, float]]:
-    """静特性(cmd 昇順)の定常速度を cmd 全域で非減少に均す(PAV)。
+    """静特性(cmd 昇順)の孤立した外れ点を 3 点メディアンで除く。
 
-    rate(−1)<0≤rate(+1) かつ不感帯の平坦部も非減少と両立するので全域で単調非減少を
-    課してよい。非物理な負のプラントゲイン(np.interp の負傾き)を生む同定ノイズを
-    除く。均しで軸の最大 |rate| の 10% を超えて動いた点があれば同定データ品質を警告。
+    カーブは AxisModel.rate の順方向補間(cmd→速度)にしか使わないので単調性は
+    課さず、1 レベルだけ飛んだ同定ノイズの除去に絞る(単調区間・不感帯・
+    折れ点は厳密に保存され、ゲイン符号の仮定も不要)。
+    置換で軸の最大 |rate| の 10% を超えて動いた点があれば同定データ品質を警告。
     """
     ys = [r for _, r in points]
-    smoothed = _isotonic(ys)
+    smoothed = _median3(ys)
+    if len(points) >= 4:
+        xs = [c for c, _ in points]
+        smoothed[0] = _fix_endpoint(
+            xs[0], ys[0], xs[1], smoothed[1], xs[2], smoothed[2]
+        )
+        smoothed[-1] = _fix_endpoint(
+            xs[-1], ys[-1], xs[-2], smoothed[-2], xs[-3], smoothed[-3]
+        )
     max_rate = max((abs(y) for y in ys), default=0.0)
     if max_rate > 0.0:
         worst = max(abs(a - b) for a, b in zip(ys, smoothed))
         if worst > 0.1 * max_rate:
             logger.warning(
-                "axis %s: isotonic regression adjusted static curve by %.0f%% of "
-                "max |rate| (%s) -- identification data quality issue",
+                "axis %s: median filter adjusted static curve by %.0f%% of "
+                "max |rate| -- identification data quality issue",
                 axis,
                 100.0 * worst / max_rate,
-                source,
             )
     return [(c, y) for (c, _), y in zip(points, smoothed)]
 
@@ -529,9 +547,9 @@ def identify_axis(
 
     静特性: 各セグメントの後半の応答の傾きを最小二乗で取り、同一指令値は平均
     する。先頭は max(skip_frac×区間長, skip_min) 秒を過渡+むだ時間として捨てる
-    (run_move_probe の切り返し直後の逆走を含む)。短いセグメントでそれだと
-    サンプルが足りない場合は skip_frac だけに緩めて粗く取る(過渡混入ぶん
-    速度をやや小さめに見積もる)。
+    (run_move_probe の切り返し直後の逆走を含む)。それだと定常サンプルが
+    min_samples 未満しか残らない短いセグメントは棄却する(過渡だけの当てはめは
+    速度を大きく誤るため。棄却が出た軸は件数を警告する)。
     むだ時間: 0→非0 の遷移で応答がしきい値を超えた時刻から、しきい値到達に
     かかる時間(しきい値/速度)を差し引いて逆算し、遷移全体の中央値を取る。
     """
@@ -544,6 +562,7 @@ def identify_axis(
     # ---- 静特性 ----
     rates: dict[float, list[float]] = {}
     seg_rate: dict[int, float] = {}
+    skipped = 0
     for i, samples in by_seg.items():
         cmd, t_send = start_by_seg[i]
         if run.axis == "pitch":
@@ -563,8 +582,8 @@ def identify_axis(
         span = samples[-1].t - t_send
         window = [s for s in samples if s.t >= t_send + max(skip_frac * span, skip_min)]
         if len(window) < min_samples:
-            window = [s for s in samples if s.t >= t_send + skip_frac * span]
-        if len(window) < min_samples:
+            if cmd != 0.0:  # cmd=0 のセトリング区間は静特性に使わないので数えない
+                skipped += 1
             continue
         t = np.array([s.t for s in window])
         resp = _responses(window, run.axis)
@@ -573,12 +592,22 @@ def identify_axis(
         if cmd != 0.0:
             rates.setdefault(cmd, []).append(rate)
 
+    if skipped:
+        n_cmd_segs = sum(1 for _, cmd, _ in run.seg_starts if cmd != 0.0)
+        logger.warning(
+            "axis %s: skipped %d/%d command segments with fewer than %d steady "
+            "samples -- their command levels are missing from the static curve",
+            run.axis,
+            skipped,
+            n_cmd_segs,
+            min_samples,
+        )
     if not rates:
         raise ValueError(f"no usable segments in probe run (axis={run.axis})")
     points = sorted((c, fmean(v)) for c, v in rates.items())
     if not any(c == 0.0 for c, _ in points):
         points = sorted(points + [(0.0, 0.0)])
-    points = _monotonic_points(points, run.axis, "identify")
+    points = _denoise_points(points, run.axis)
 
     # ---- むだ時間 ----
     thr = _ONSET_THRESHOLD[kind]
@@ -650,14 +679,12 @@ class PlantModel:
     @classmethod
     def load(cls, path) -> "PlantModel":
         data = json.loads(Path(path).read_text(encoding="utf-8"))
+        # 外れ点の除去は同定時に済んでいる(3点メディアンは非冪等なので再適用しない)
         axes = {
             name: AxisModel(
                 axis=name,
                 unit=a["unit"],
-                # レガシー JSON の非単調な外れ点も読込時に均す(ファイル自体は書換えない)
-                points=_monotonic_points(
-                    sorted((float(c), float(r)) for c, r in a["points"]), name, "load"
-                ),
+                points=sorted((float(c), float(r)) for c, r in a["points"]),
                 deadtime_s=float(a["deadtime_s"]),
             )
             for name, a in data["axes"].items()

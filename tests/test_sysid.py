@@ -21,7 +21,8 @@ from app.sysid.identify import (
     PlantModel,
     ProbeRun,
     ProbeSample,
-    _isotonic,
+    _denoise_points,
+    _median3,
     build_plant,
     extract_dts,
     identify_axis,
@@ -305,26 +306,55 @@ def test_run_csv_roundtrip(tmp_path):
     assert m2.deadtime_s == pytest.approx(m1.deadtime_s)
 
 
-def _increments_nonnegative(points) -> bool:
-    xs = [c for c, _ in points]
-    ys = [r for _, r in points]
-    grid = np.linspace(xs[0], xs[-1], 200)
-    interp = np.interp(grid, xs, ys)
-    return bool(np.all(np.diff(interp) >= -1e-9))
+def test_median3_kills_isolated_spike_and_preserves_shape():
+    # 孤立スパイクは隣の値に潰れる
+    assert _median3([0.0, 1.0, 2.0, 9.0, 4.0, 5.0]) == pytest.approx(
+        [0.0, 1.0, 2.0, 4.0, 5.0, 5.0]
+    )
+    # 単調な区間(不感帯・折れ点含む)は厳密に不変
+    knee = [-9.0, -4.0, 0.0, 0.0, 0.0, 4.0, 9.0]
+    assert _median3(knee) == pytest.approx(knee)
+    assert _median3([0.0, 1.0, 2.0, 3.0]) == pytest.approx([0.0, 1.0, 2.0, 3.0])
 
 
-def test_isotonic_pav_makes_nondecreasing():
-    # 非単調な列を PAV で非減少に均す(隣接違反はプール平均に併合)
-    assert _isotonic([1.0, 3.0, 2.0, 5.0]) == pytest.approx([1.0, 2.5, 2.5, 5.0])
-    out = _isotonic([-90.0, 0.0, 1.2, 82.8, 77.0, 90.0])
-    assert all(out[i + 1] >= out[i] - 1e-9 for i in range(len(out) - 1))
+def test_denoise_fixes_endpoint_spike_on_uniform_grid():
+    """等間隔グリッドの端の外れ値は内側からの外挿で潰れる(線形な端は不変)。"""
+    pts = [(-1.0, -237.0), (-0.99, -180.0), (-0.98, -176.0), (-0.97, -172.0)]
+    out = _denoise_points(pts, "pitch")
+    assert out[0][1] == pytest.approx(-184.0)  # スパイク除去
+    assert [y for _, y in out[1:]] == pytest.approx([-180.0, -176.0, -172.0])
+    # 線形に伸びる端は不変
+    lin = [(0.0, 0.0), (0.01, 1.0), (0.02, 2.0), (0.03, 3.0)]
+    assert _denoise_points(lin, "yaw") == pytest.approx(lin)
 
 
-def test_load_sanitizes_nonmonotonic_curve(tmp_path):
-    """レガシー JSON の非単調な外れ点も、読込時に単調非減少へ均される。"""
-    plant = make_plant()
-    # yaw に非物理な外れ点(rate(0.705)>rate(0.715))を仕込む
-    plant.axes["yaw"] = AxisModel(
+def test_denoise_keeps_endpoints_on_irregular_grid():
+    """間隔が不揃いなカーブ(レベル欠損・手書き)では端点を外挿で壊さない。"""
+    pts = [(-1.0, -90.0), (-0.6, -25.0), (-0.55, -1.2), (0.0, 0.0)]
+    out = _denoise_points(pts, "yaw")
+    assert out == pytest.approx(pts)
+
+
+def test_median3_is_sign_agnostic():
+    """負ゲイン軸(単調減少カーブ)も一切歪めない。"""
+    dec = [90.0, 25.0, 1.2, 0.0, -1.2, -25.0, -90.0]
+    assert _median3(dec) == pytest.approx(dec)
+
+
+def test_median3_does_not_staircase_noise():
+    """小さな測定ノイズを階段状のプールへ均さない(値の多様性が保たれる)。"""
+    rng = np.random.default_rng(0)
+    true = np.linspace(0.0, 100.0, 51)
+    noisy = (true + rng.normal(0.0, 1.0, true.size)).tolist()
+    out = _median3(noisy)
+    # 各点が近傍の実測値のまま残る(平坦なプールへ均されない)こと
+    assert len(set(out)) >= 40
+    assert max(abs(a - b) for a, b in zip(out, true)) < 4.0
+
+
+def _spiked_yaw() -> AxisModel:
+    # yaw の 0.705 に孤立スパイク(周囲の傾きから大きく外れる)を仕込んだカーブ
+    return AxisModel(
         "yaw",
         "deg/s",
         [
@@ -332,30 +362,62 @@ def test_load_sanitizes_nonmonotonic_curve(tmp_path):
             (0.0, 0.0),
             (0.55, 1.2),
             (0.705, 82.8),
-            (0.715, 77.0),
+            (0.715, 40.0),
             (1.0, 90.0),
         ],
         0.1,
     )
+
+
+def test_save_load_roundtrip_is_exact(tmp_path):
+    """load(save(x)) == x。読込時にフィルタを再適用しない(3点メディアンは
+    非冪等なので、再適用すると保存・プロットしたカーブとシムが食い違う)。"""
+    plant = make_plant()
+    plant.axes["yaw"] = _spiked_yaw()  # 再フィルタされれば必ず動く点を含む
     path = plant.save(tmp_path / "plant.json")
     loaded = PlantModel.load(path)
-    pts = loaded.axes["yaw"].points
-    ys = [r for _, r in pts]
-    assert all(ys[i + 1] >= ys[i] - 1e-9 for i in range(len(ys) - 1))  # 非減少
-    assert _increments_nonnegative(
-        pts
-    )  # np.interp の増分が非負(負のプラントゲインなし)
+    for name, m in plant.axes.items():
+        assert loaded.axes[name].points == pytest.approx(m.points)
 
 
-def test_identified_curve_is_monotonic():
-    """同定した静特性カーブは cmd 全域で非減少(np.interp の傾きが非負)。"""
+def test_identified_curve_matches_plant():
+    """同定した静特性がプラント真値に一致し、階段状に潰れない。"""
     plant = make_plant()
     sim = SimulatedVRChat(plant)
-    run = probe(
-        sim, "yaw", look_schedule([0.3, 0.5, 0.55, 0.6, 0.8, 1.0], hold=1.0, settle=0.4)
+    levels = [0.3, 0.5, 0.55, 0.6, 0.8, 1.0]
+    run = probe(sim, "yaw", look_schedule(levels, hold=1.0, settle=0.4))
+    model = identify_axis(run)
+    true = plant.axes["yaw"]
+    for c in levels:
+        assert model.rate(c) == pytest.approx(true.rate(c), rel=0.1, abs=0.5)
+    # 隣接レベルが同一値へプールされていない(0.55→0.6 の急峻な立ち上がりが残る)
+    assert model.rate(0.6) - model.rate(0.55) > 10.0
+
+
+def test_short_segments_are_rejected():
+    """定常サンプルが足りないセグメントは緩和フィットせず棄却される。"""
+    dt = 0.03
+    samples: list[ProbeSample] = []
+    # seg0: 十分長い(1.0s) cmd=+0.5、定常 10deg/s
+    for k in range(34):
+        t = k * dt
+        samples.append(ProbeSample(0, 0.5, t, int(t * 1000), 0, 0, 0, 10.0 * t, 0))
+    # seg1: 0.15s しかない cmd=+1.0(skip_min=0.2 を差し引くと空 → 棄却されるべき)
+    t1 = 1.02
+    for k in range(6):
+        t = t1 + k * dt
+        samples.append(
+            ProbeSample(1, 1.0, t, int(t * 1000), 0, 0, 0, 10.2 + 200.0 * (t - t1), 0)
+        )
+    run = ProbeRun(
+        axis="yaw",
+        samples=samples,
+        seg_starts=[(0, 0.5, 0.0), (1, 1.0, t1)],
     )
     model = identify_axis(run)
-    assert _increments_nonnegative(model.points)
+    cmds = [c for c, _ in model.points]
+    assert 0.5 in cmds
+    assert 1.0 not in cmds  # 短いセグメントの捏造レートが混入しない
 
 
 def test_deadtime_interpolates_crossing():
