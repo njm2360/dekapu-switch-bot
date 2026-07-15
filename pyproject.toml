@@ -20,6 +20,7 @@ find-button = "app.cli.find_button:main"
 patrol-buttons = "app.cli.patrol_buttons:main"
 probe-axes = "app.cli.probe_axes:main"
 sim-face = "app.cli.sim_face:main"
+sim-video = "app.cli.sim_video:main"
 
 [dependency-groups]
 dev = ["pytest>=8.0"]
