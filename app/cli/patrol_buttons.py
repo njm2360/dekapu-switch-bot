@@ -124,6 +124,12 @@ def _add_gain_args(parser) -> None:
         "--arrive", type=float, default=d.arrive, help="ウェイポイント到達半径[m]"
     )
     parser.add_argument(
+        "--nav-lookahead",
+        type=float,
+        default=d.nav_lookahead,
+        help="経路先読み(carrot)の弧長[m]",
+    )
+    parser.add_argument(
         "--standoff",
         type=float,
         default=d.standoff,
@@ -155,12 +161,18 @@ def _add_gain_args(parser) -> None:
         "--turn-deadzone",
         type=float,
         default=d.turn_deadzone,
-        help="正対 yaw の不感帯補償(視点軸が反応しない範囲。0で無効。マウス時は0推奨)",
+        help="正対 yaw の不感帯補償",
     )
-    # 移動中(nav)の yaw: 移動には強すぎて暴れるので穏やかに。不感帯補償は入れない。
+    # 移動中(nav)の yaw: face と同機構の不感帯補償つき(kp は補償ぶん低め)。
     parser.add_argument("--nav-turn-kp", type=float, default=d.nav_turn_kp)
     parser.add_argument("--nav-turn-ki", type=float, default=d.nav_turn_ki)
     parser.add_argument("--nav-turn-kd", type=float, default=d.nav_turn_kd)
+    parser.add_argument(
+        "--nav-turn-deadzone",
+        type=float,
+        default=d.nav_turn_deadzone,
+        help="nav yaw の不感帯補償",
+    )
     # 視点固定の並進(move_to): 進行方向へ回さず前後+横で経路を追う。誤差=残距離[m]。
     parser.add_argument("--hmove-kp", type=float, default=d.hmove_kp)
     parser.add_argument("--hmove-ki", type=float, default=d.hmove_ki)

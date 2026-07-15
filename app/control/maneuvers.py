@@ -41,6 +41,63 @@ def _dist(a: tuple[float, float], b: tuple[float, float]) -> float:
     return math.hypot(a[0] - b[0], a[1] - b[1])
 
 
+def _cum_arclen(wps: list[tuple[float, float]]) -> list[float]:
+    """ポリラインの累積弧長(cum[0]=0、cum[-1]=全長)。"""
+    cum = [0.0]
+    for i in range(len(wps) - 1):
+        cum.append(cum[-1] + _dist(wps[i], wps[i + 1]))
+    return cum
+
+
+def _project_arclen(
+    cur: tuple[float, float],
+    wps: list[tuple[float, float]],
+    cum: list[float],
+    hint: int,
+) -> tuple[int, float]:
+    """cur を経路ポリラインへ射影し (セグメント番号, 始点からの弧長) を返す。
+
+    hint(前回のセグメント)以降だけを見て、経路が自分に近接して戻ってくる形でも
+    射影が後退しないようにする。
+    """
+    best_d: float | None = None
+    best_i, best_s = max(0, min(hint, len(wps) - 2)), cum[-1]
+    for i in range(max(0, hint), len(wps) - 1):
+        ax, az = wps[i]
+        bx, bz = wps[i + 1]
+        dx, dz = bx - ax, bz - az
+        l2 = dx * dx + dz * dz
+        if l2 <= 1e-12:
+            continue
+        t = ((cur[0] - ax) * dx + (cur[1] - az) * dz) / l2
+        t = max(0.0, min(1.0, t))
+        d = math.hypot(cur[0] - (ax + t * dx), cur[1] - (az + t * dz))
+        if best_d is None or d < best_d:
+            best_d, best_i, best_s = d, i, cum[i] + t * math.sqrt(l2)
+    return best_i, best_s
+
+
+def _point_at_arclen(
+    wps: list[tuple[float, float]], cum: list[float], s: float
+) -> tuple[float, float]:
+    """弧長 s の位置の点(範囲外は端点でクランプ)。"""
+    if s <= 0.0:
+        return wps[0]
+    if s >= cum[-1]:
+        return wps[-1]
+    for i in range(len(wps) - 1):
+        if cum[i + 1] >= s:
+            seg = cum[i + 1] - cum[i]
+            if seg <= 1e-12:
+                return wps[i + 1]
+            t = (s - cum[i]) / seg
+            return (
+                wps[i][0] + t * (wps[i + 1][0] - wps[i][0]),
+                wps[i][1] + t * (wps[i + 1][1] - wps[i][1]),
+            )
+    return wps[-1]
+
+
 def _next_frame(
     reader: PoseSource,
     last_t: int | None,
@@ -106,14 +163,16 @@ def follow_path(
 
     nav.yaw.reset()
     nav.forward.reset()
-    idx = 1 if len(wps) > 1 else 0
+    cum = _cum_arclen(wps)
+    total = cum[-1]
+    seg = 0
     last_t: int | None = None
     last_time = t0 = clock.monotonic()
     frames = 0
     reason = "arrived"
     yaw_acc = AxisAccumulator() if track else None
     try:
-        while idx < len(wps):
+        while True:
             pose, dt, now = _next_frame(reader, last_t, last_time, clock=clock)
             if pose is None:
                 reason = "hud_lost"
@@ -123,20 +182,18 @@ def follow_path(
             frames += 1
             cur = (pose.position[0], pose.position[2])
 
-            prev_idx = idx
-            while idx < len(wps) - 1 and _dist(cur, wps[idx]) < gains.arrive:
-                idx += 1
-            if idx != prev_idx:
-                nav.yaw.reset_derivative()  # 目標が急に変わったとき turn が跳ねるのを防ぐ
-            target = wps[idx]
-            final = idx == len(wps) - 1
-            err, dist = heading_error(cur, pose.yaw_deg, target)
-            if final and dist < gains.arrive:
+            seg, s_proj = _project_arclen(cur, wps, cum, seg)
+            end_dist = _dist(cur, wps[-1])
+            if total - s_proj < gains.arrive and end_dist < gains.arrive:
                 break
+            carrot_s = s_proj + gains.nav_lookahead
+            final = carrot_s >= total  # carrot が末端にクランプ=減速フェーズ
+            target = _point_at_arclen(wps, cum, carrot_s)
+            err, _ = heading_error(cur, pose.yaw_deg, target)
 
             turn = nav.yaw.update(err, dt)
             ff = forward_factor(err)
-            speed = (nav.forward.update(dist, dt) if final else gains.speed) * ff
+            speed = (nav.forward.update(end_dist, dt) if final else gains.speed) * ff
             look.look(turn)
             move.move(forward=speed)
 
@@ -145,7 +202,7 @@ def follow_path(
                     t=now - t0,
                     phase="nav",
                     target=name,
-                    wp=idx,
+                    wp=seg + 1,
                     dt=dt,
                     x=pose.position[0],
                     y=pose.position[1],
@@ -154,7 +211,7 @@ def follow_path(
                     pitch=pose.pitch_deg,
                     tx=target[0],
                     tz=target[1],
-                    dist=dist,
+                    dist=end_dist,
                     yaw_err=err,
                     turn_p=nav.yaw.last_p,
                     turn_i=nav.yaw.last_i,
@@ -177,7 +234,7 @@ def follow_path(
         "[%s] nav end: %s wp=%d/%d frames=%d %.2fs",
         name,
         reason,
-        idx,
+        seg + 1,
         len(wps),
         frames,
         elapsed,

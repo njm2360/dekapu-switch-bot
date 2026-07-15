@@ -85,16 +85,18 @@ class PatrolGains:
     speed: float = 0.9  # 巡航前進速度の上限(0..1)。狭所ではコーナー切りで壁に擦る
     #                     ことがあるが、経路追従で戻れるので許容する
     arrive: float = 0.35  # ウェイポイント到達半径[m]
+    nav_lookahead: float = 1.2  # 経路先読み(carrot)の弧長[m]。狭所は 0.8 程度に
     standoff: float = 1.0  # ボタン正面で止まる距離[m](Use到達距離内に収める)
     # ---- 収束判定・打切り ----
     face_tol: float = 2.0  # 正対(粗合わせ)とみなす角度[deg]
     settle: int = 3  # 収束判定に必要な連続フレーム数(face / align 共通)
     nav_timeout: float = 60.0  # 移動の打切り秒
     face_timeout: float = 12.0  # 正対の打切り秒
-    # ---- 移動中(nav)の yaw: 穏やか・不感帯補償なし ----
-    nav_turn_kp: float = 0.07
+    # ---- 移動中(nav)の yaw: face と同機構の不感帯補償つき(tol は入れない)。
+    nav_turn_kp: float = 0.04
     nav_turn_ki: float = 0.025
-    nav_turn_kd: float = 0.004
+    nav_turn_kd: float = 0.002
+    nav_turn_deadzone: float = 0.50
     # ---- 視点固定の並進(hold-view move): 進行方向へ回さず forward/strafe を体フレームで
     #      合成して経路を追う。誤差=目標までの残距離[m]の体フレーム成分。指令上限は speed。 ----
     hmove_kp: float = 1.0  # 安全域 0.31〜約2(下は不感帯で失速、上は振動)
@@ -130,8 +132,8 @@ class PatrolGains:
 
 
 def nav_controllers(g: PatrolGains) -> NavControllers:
-    """移動追従用の制御器を組む。yaw は不感帯補償なし(連続追従では小さい指令が
-    自然な遊びとして働き、暴れを防ぐ)。"""
+    """移動追従用の制御器を組む。yaw は face と同じ不感帯補償つき(tol は入れない。
+    根拠と安定範囲は gain-tuning.md の nav 節)。"""
     yaw = AxisController(
         PID(
             kp=g.nav_turn_kp,
@@ -140,6 +142,7 @@ def nav_controllers(g: PatrolGains) -> NavControllers:
             out_min=-1.0,
             out_max=1.0,
             i_limit=0.5,
+            out_deadzone=g.nav_turn_deadzone,
         )
     )
     forward = AxisController(
