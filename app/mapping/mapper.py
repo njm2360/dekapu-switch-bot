@@ -25,7 +25,7 @@ def _signed_area(ring: np.ndarray) -> float:
 
 
 def _close_ring(ring: np.ndarray, ccw: bool) -> np.ndarray:
-    """向きを ``ccw`` に揃え、先頭点を末尾に付けて閉じた (M, 2) 配列を返す。"""
+    """向きを ccw に揃え、先頭点を末尾に付けて閉じた (M, 2) 配列を返す。"""
     r = np.asarray(ring, dtype=np.float64)
     if (_signed_area(r) < 0.0) == ccw:  # 望む向きと逆なら反転
         r = r[::-1]
@@ -85,24 +85,13 @@ class OccupancyGrid:
 class RoomMapper:
     """壁沿い歩行のポーズ列を蓄積して部屋地図を作るアキュムレータ。
 
-    ライブ収集の例::
+    min_move [m] 未満しか動いていない点は間引く(静止時の 60fps 重複によるノイズ増を
+    防ぐ)。0 で無効。
 
-        mapper = RoomMapper()
-        for pose in reader.poses():
-            mapper.add_pose(pose)
-        mapper.save("room")            # room.npz + room.json
-
-    ``min_move`` [m] 未満しか動いていない点は間引く(静止時の 60fps 重複でメモリと
-    ノイズが増えるのを防ぐ)。0 で無効。
-
-    セグメントは ``kind`` を持つ(:data:`outer`=外周 / :data:`inner`=内壁)。外周区間は
-    部屋の外リング、内壁区間は穴(柱・中庭など「回」型の内側)として扱われる
-    (:meth:`room_polygon`)。:meth:`set_mode` でモードを切り替える。
-
-    壁から浮いてしまった時の再走行補正:
-
-    * :meth:`rewind` — 現在セグメント末尾の点を距離ぶん消し、その区間を歩き直す
-    * :meth:`redo_segment` — 現在セグメントを丸ごと破棄して同じモードで取り直す
+    セグメントは kind を持つ(outer=外周 / inner=内壁)。外周は部屋の外リング、内壁は
+    穴(柱・中庭など「回」型の内側)として room_polygon で扱う。set_mode でモード切替。
+    壁から浮いた時の補正は rewind(末尾を距離ぶん消す)と redo_segment(現在セグメント
+    を丸ごと破棄)。
     """
 
     def __init__(self, min_move: float = 0.02):
@@ -138,15 +127,14 @@ class RoomMapper:
         return True
 
     def _cur_has_points(self) -> bool:
-        """現在セグメントに点があるか(点は順に append されるので末尾で判定できる)。"""
+        """現在セグメントに点があるか(点は順に追加されるので末尾で判定できる)。"""
         return bool(self._seg) and self._seg[-1] == self._cur_seg
 
     def break_segment(self) -> None:
-        """ペンアップ。以後に追加する点を新しいセグメント(同じモード)にする。
+        """ペンアップ。以後の点を新しいセグメント(同じモード)にする。
 
-        キャプチャ一時停止のように、軌跡が不連続になる箇所で呼ぶ。分割をまたぐ点どうしは
-        線で繋がない(壁を横切る偽の線を防ぐ)。壁伝いに一周できず、いったん壁から離れて
-        別の壁区間へ移動する場合に使う。
+        軌跡が不連続になる箇所で呼ぶ。分割をまたぐ点どうしは線で繋がず、壁を横切る
+        偽の線を防ぐ。
         """
         if self._cur_has_points():
             self._cur_seg += 1
@@ -156,15 +144,14 @@ class RoomMapper:
     # ---- モード切替(外周 / 内壁) -------------------------------------
     @property
     def mode(self) -> str:
-        """現在の記録モード(``"outer"`` or ``"inner"``)。"""
+        """現在の記録モード("outer" or "inner")。"""
         return self._mode
 
     def set_mode(self, kind: str) -> None:
-        """記録モードを切り替える。外周(outer)/内壁・穴(inner)。
+        """記録モードを切り替える(outer=外周 / inner=内壁・穴)。
 
-        現在セグメントに既に点があれば、まずペンアップして新しいセグメントを開始し、
-        そこから新モードで記録する(1セグメント内に外周と内壁が混在しないようにする)。
-        点がまだ無ければ現在セグメントの kind を差し替えるだけ。
+        点のあるセグメントはペンアップしてから切り替え、1セグメント内に外周と内壁を
+        混在させない。点が無ければ現在セグメントの kind を差し替えるだけ。
         """
         kind = _norm_kind(kind)
         if kind == self._mode:
@@ -179,11 +166,10 @@ class RoomMapper:
 
     # ---- 再走行補正 ----------------------------------------------------
     def rewind(self, distance_m: float = 0.5) -> int:
-        """現在セグメント末尾の点を、辿った距離が ``distance_m`` を超えるまで消す。
+        """現在セグメント末尾の点を、辿った距離が distance_m を超えるまで消す。
 
-        壁から浮いたのに気付いた時に呼ぶ。浮いた末尾区間を消してから壁沿いに歩き直せば、
-        誤った点が残らず補正できる。消せるのは現在セグメント内のみ(前のセグメントには
-        遡らない)。消した点数を返す。
+        壁から浮いた末尾区間を消して歩き直すための補正。前のセグメントには遡らない。
+        消した点数を返す。
         """
         removed = 0
         acc = 0.0
@@ -202,11 +188,8 @@ class RoomMapper:
         return removed
 
     def redo_segment(self) -> int:
-        """現在セグメントを丸ごと破棄し、同じモードで取り直せるようにする。
-
-        その壁の走行全体をやり直したい時に呼ぶ。セグメントIDとモードは維持されるので、
-        以後 add した点は同じセグメントに入る。破棄した点数を返す。
-        """
+        """現在セグメントを丸ごと破棄する。ID とモードは維持され、同じセグメントに
+        取り直せる。破棄した点数を返す。"""
         removed = 0
         while self._cur_has_points():
             self._pop_last()
@@ -244,7 +227,7 @@ class RoomMapper:
         return [pts[seg == s] for s in dict.fromkeys(self._seg)]
 
     def segment_kinds(self) -> list[str]:
-        """:meth:`segment_points` と同じ順で、各セグメントの kind を返す。"""
+        """segment_points と同じ順で、各セグメントの kind を返す。"""
         return [self._kind[s] for s in dict.fromkeys(self._seg)]
 
     def _point_kinds(self) -> np.ndarray:
@@ -266,9 +249,8 @@ class RoomMapper:
     def room_polygon(self) -> tuple[list[np.ndarray], list[np.ndarray]]:
         """描画・面積計算用の (外周リング列, 穴リング列)。
 
-        各リングは閉じた (M, 2) XZ 配列(先頭点を末尾に付け足して閉包)。外周は反時計回り、
-        穴は時計回りに向き付けする(nonzero 塗り規則で穴が抜ける)。「回」型なら外周1つ+
-        中央の穴1つになる。
+        各リングは閉じた (M, 2) XZ 配列。外周は反時計回り、穴は時計回りに向き付けする
+        (nonzero 塗り規則で穴が抜ける)。
         """
         outer, inner = self._rings_by_kind()
         outer = [_close_ring(r, ccw=True) for r in outer]
@@ -318,11 +300,8 @@ class RoomMapper:
         )
 
     def outer_bounds(self) -> Bounds | None:
-        """外周(outer)区間だけの XZ バウンディングボックス。
-
-        「回」型のように内壁(inner)を歩いた場合でも、部屋の寸法は外周から測る。外周点が
-        無ければ全点にフォールバックする。
-        """
+        """外周(outer)区間だけの XZ バウンディングボックス。部屋の寸法は内壁を含めず
+        外周から測る。外周点が無ければ全点にフォールバック。"""
         pts = self.points
         if len(pts) == 0:
             return None
@@ -361,11 +340,11 @@ class RoomMapper:
     def occupancy_grid(
         self, cell: float = 0.1, pad: float = 0.5, kind: Kind | None = None
     ) -> OccupancyGrid:
-        """経路をセル解像度 ``cell`` [m] のグリッドに描き込んだ占有グリッドを返す。
+        """経路をセル解像度 cell [m] のグリッドに描き込んだ占有グリッドを返す。
 
-        連続する点の間を線分として等間隔にサンプリングし、通過したセルを True にする。
-        ``kind`` を指定するとその種別(outer/inner)のセグメントだけを描き込む。
-        グリッドの寸法・原点は kind によらず全点の bounds で共通(重ね合わせ可能)。
+        連続する点の間を線分として等間隔にサンプリングし、通過セルを True にする。
+        kind 指定時はその種別のセグメントのみ。グリッドの寸法・原点は kind によらず
+        全点の bounds で共通(重ね合わせ可能)。
         """
         b = self.bounds()
         if b is None:
@@ -385,10 +364,10 @@ class RoomMapper:
         return OccupancyGrid(grid=grid, cell=cell, bounds=gb)
 
     def _segment_samples(self, step: float, kind: str | None = None) -> np.ndarray:
-        """全線分を等間隔サンプルした点列を返す(セグメントごとのループなしでベクトル化)。
+        """全線分を等間隔サンプルした点列(ベクトル化)。
 
-        セグメント分割(ペンアップ)をまたぐ辺は繋がない。孤立点も落とさないよう、
-        全ての元の点はそのまま含める。kind 指定時はその種別のセグメントに限る。
+        ペンアップをまたぐ辺は繋がない。孤立点を落とさないよう元の点は全て含める。
+        kind 指定時はその種別のセグメントに限る。
         """
         pts = self.points
         if len(pts) == 0:

@@ -1,24 +1,7 @@
-"""実機プローブ CLI: VRChat の各入力軸の応答特性を測って PlantModel にまとめる。
+"""実機プローブ CLI: VRChat の各入力軸の応答特性を測り PlantModel(plant.json)を作る。
 
-使い方(実機。開けた場所に立って実行):
-    probe-axes                        # 4軸すべて測定 → logs/probe_*/plant.json
-    probe-axes --axes yaw,strafe      # 軸を絞る
-    probe-axes --axes pitch --out logs/probe_XXXX   # 1軸だけ測り直す
-    probe-axes --from-log logs/probe_XXXX           # 生ログから同定だけやり直す
-
-出力ディレクトリには生ログ CSV(probe_*.csv / segments_*.csv)、plant.json、
-軸ごとの静特性プロット PNG が入る。plant.json は出力ディレクトリに生ログがある
-軸すべてから組むので、1軸だけ取り直しても他の軸は残る。Ctrl-C で中断しても
-完了済みの軸だけで同定する。plant.json は sim-face が読む。
-
-必要スペース:
-- yaw / pitch はその場で回るだけ。pitch は視線から ±pitch-span(既定 45°)の
-  角度ガード内で振る。
-- forward / strafe は開始位置から軸方向 ±max-travel(既定 3m)の範囲内で往復する
-  (位置ガードで切り返す。行き過ぎマージン ≒ 最高速度×むだ時間)。狭い場所では
-  --max-travel 0.4 程度まで詰められる(速い指令レベルの精度は粗くなる)。
-
-測定値はワールド・アバター・fps に依存するので、環境が変わったら測り直す。
+plant.json は出力ディレクトリに生ログがある軸すべてから組むため、1軸だけの
+取り直しや --from-log での再同定ができる。測定値はワールド・アバター・fps 依存。
 """
 
 import argparse

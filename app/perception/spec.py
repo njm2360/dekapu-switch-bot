@@ -1,3 +1,4 @@
+# HUD ビットグリッドのプロトコル定数。hlsl/PoseTelemetryHUD.shader と一致必須。
 MAGIC = 0x5AC3E7A1
 
 # ワード配列(uint32[12])のレイアウト

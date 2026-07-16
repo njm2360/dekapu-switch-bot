@@ -32,7 +32,7 @@ def draw_map(
     show_occupancy: bool = True,
     title: str | None = None,
 ) -> None:
-    """``ax`` に地図を描く。呼び出し側で ``ax.clear()`` 済みを想定(ライブ更新用)。"""
+    """ax に地図を描く。呼び出し側で ax.clear() 済みを想定(ライブ更新用)。"""
     pts = mapper.points
     if len(pts) == 0:
         return

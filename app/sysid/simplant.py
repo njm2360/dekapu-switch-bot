@@ -1,17 +1,10 @@
 """同定済みプラントの模擬(実機なしのゲイン検証用)。
 
-sysid.PlantModel(軸ごとの静特性+むだ時間、フレーム間隔 dt 列)を積分して
-6DoF ポーズを生成する。PoseSource / LookActuator / MoveActuator をすべて
-満たすので、maneuvers の制御ループ(turn_to / aim_at / follow_path)へ
-そのまま注入できる。
-
-start_realtime() でバックグラウンドスレッドが dt 間隔で実時間ステップし、制御
-ループを無改造で回せる(ループが実時間で測る dt とシミュレータの dt が一致する)。
-テストや高速な探索では step() を手動で呼ぶ非実時間モードを使う。
-
-モデル化しているのは静特性・むだ時間・フレーム間隔のみ。視点軸の時間方向の
-平滑化(ランプ)・衝突・デコードノイズは含まない(プローブのステップ応答で
-顕著なら要拡張)。
+PlantModel(静特性+むだ時間+dt 列)を積分して 6DoF ポーズを生成する。
+PoseSource / LookActuator / MoveActuator を満たすので、maneuvers の制御ループへ
+そのまま注入できる。start_realtime() で実時間駆動、テストや高速な探索では
+step() を手動で呼ぶ。モデル化は静特性・むだ時間・フレーム間隔のみで、視点軸の
+平滑化(ランプ)・衝突・デコードノイズは含まない。
 """
 
 import itertools
@@ -182,6 +175,8 @@ class SimulatedVRChat:
 
 
 class SimClock:
+    """模擬クロック。sleep 中に到来するフレームぶんシミュレータを進める。"""
+
     def __init__(self, sim: SimulatedVRChat):
         self.sim = sim
         self.t = 0.0

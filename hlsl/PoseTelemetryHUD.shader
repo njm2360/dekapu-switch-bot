@@ -48,6 +48,7 @@ Shader "Custom/PoseTelemetryHUD"
                 return o;
             }
 
+            // Protocol constants: must match app/perception/spec.py
             #define ROWS 12
             #define COLS 32
             static const uint MAGIC = 0x5AC3E7A1u;

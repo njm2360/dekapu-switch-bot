@@ -3,7 +3,7 @@
 制御ループは AxisController に (誤差, dt) を渡して指令 [-1,1] を得るだけ。PID の
 ゲインや不感帯補償はここに閉じ込め、アクチュエータに合わせて差し替え・再調整する。
 
-巡回制御のチューニング定数はすべて ``PatrolGains`` に集約する。CLI はこの既定値を
+巡回制御のチューニング定数はすべて PatrolGains に集約する。CLI はこの既定値を
 上書きするだけにして、数値の二重管理を避ける。
 """
 
@@ -16,9 +16,8 @@ from .pid import PID
 class AxisController:
     """1軸のフィードバック制御器。誤差 → 指令[-1,1]。
 
-    誤差の絶対値が tol 未満のときは指令を0にする(収束付近で行き過ぎたり、不感帯補償に
-    よる最小の旋回がいつまでも残るのを止める)。不感帯補償や積分制限は内部の PID 側で
-    設定する。
+    誤差の絶対値が tol 未満なら指令0(不感帯補償による微小指令の残留を止める)。
+    不感帯補償や積分制限は内部の PID 側で設定する。
     """
 
     pid: PID
@@ -59,7 +58,7 @@ class NavControllers:
 
 @dataclass
 class TranslateControllers:
-    """視点固定の並進フェーズの制御器"""
+    """視点固定の並進フェーズの制御器。"""
 
     forward: AxisController  # 誤差=目標までの前方距離[m] → Vertical指令
     strafe: AxisController  # 誤差=目標までの右方距離[m] → Horizontal指令
@@ -82,8 +81,9 @@ class PatrolGains:
     """
 
     # ---- 移動・到達 ----
-    speed: float = 0.9  # 巡航前進速度の上限(0..1)。狭所ではコーナー切りで壁に擦る
-    #                     ことがあるが、経路追従で戻れるので許容する
+    speed: float = (
+        0.9  # 巡航前進速度の上限(0..1)。狭所の壁擦りは経路追従で戻れるので許容
+    )
     arrive: float = 0.35  # ウェイポイント到達半径[m]
     nav_lookahead: float = 1.2  # 経路先読み(carrot)の弧長[m]。狭所は 0.8 程度に
     standoff: float = 1.0  # ボタン正面で止まる距離[m](Use到達距離内に収める)

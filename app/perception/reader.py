@@ -49,18 +49,10 @@ class ReaderStats:
 
 
 class PoseReader:
-    """VRChat HUD からポーズを読み続けるリーダ。
+    """VRChat HUD からポーズを読み続けるリーダ(既定は WindowsVRChatCapture)。
 
-    使い方::
-
-        reader = PoseReader()              # 既定で WindowsVRChatCapture を使用
-        reader.start()
-        pose = reader.get_latest()         # 最新ポーズ(なければ None)
-        for pose in reader.poses():        # 新フレームをブロッキング取得
-            ...
-        reader.stop()
-
-    テストや非Windows環境では ``source=ArrayFrameSource(frame)`` を注入する。
+    start() 後、get_latest() で最新ポーズ、poses() で新規ポーズをブロッキング取得。
+    テストや非Windows環境では source=ArrayFrameSource(frame) を注入する。
     """
 
     def __init__(self, source: FrameSource | None = None):

@@ -105,7 +105,9 @@ class Pilot:
             return NavResult(False, False, "unreachable", None, 0.0, 0)
         logger.info(
             "[%s] 経路 %d点 / %.1fm%s",
-            name, len(path.waypoints), path.length,
+            name,
+            len(path.waypoints),
+            path.length,
             "(壁面→最寄り床へ)" if path.goal_blocked else "",
         )
         res = follow_path(
@@ -122,10 +124,9 @@ class Pilot:
         return res
 
     def move_to(self, xz: tuple[float, float], *, name: str = "move") -> NavResult:
-        """視点を変えずに xz へ並進する。壁回避は goto と同じ plan_path が担う。
+        """視点を回さず xz へ並進する(壁回避は goto と同じ plan_path)。
 
-        進行方向へ視点を回さない点だけが goto と違う。前後+横移動で経路を追うので、
-        経路が横方向に大きく曲がると goto より遅い(strafe が前進より遅いため)。
+        前後+横移動で経路を追うため、横に曲がる経路では goto より遅い。
         """
         pose = self.reader.get_latest()
         if pose is None:
@@ -138,7 +139,9 @@ class Pilot:
             return NavResult(False, False, "unreachable", None, 0.0, 0)
         logger.info(
             "[%s] 経路 %d点 / %.1fm (視点固定)%s",
-            name, len(path.waypoints), path.length,
+            name,
+            len(path.waypoints),
+            path.length,
             "(壁面→最寄り床へ)" if path.goal_blocked else "",
         )
         res = follow_path_hold_view(
@@ -234,13 +237,19 @@ class Pilot:
         aim = self.aim(xyz, name=name)
         logger.info(
             "[%s] arrived. aim yaw_err=%+.2f° pitch_err=%+.2f° (%s)",
-            name, aim.yaw_err, aim.pitch_err, aim.reason,
+            name,
+            aim.yaw_err,
+            aim.pitch_err,
+            aim.reason,
         )
         if self.gains.align_tol > 0.0:
             aim = self.align(xyz, name=name)
             logger.info(
                 "[%s] align yaw_err=%+.2f° pitch_err=%+.2f° (%s)",
-                name, aim.yaw_err, aim.pitch_err, aim.reason,
+                name,
+                aim.yaw_err,
+                aim.pitch_err,
+                aim.reason,
             )
         return nav, aim
 

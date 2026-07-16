@@ -27,7 +27,7 @@ def test_move_sends_clamped_axes():
     sock, port = _receiver()
     try:
         osc = VRChatOSC("127.0.0.1", port)
-        osc.move(forward=2.0, strafe=-3.0)   # クランプされる
+        osc.move(forward=2.0, strafe=-3.0)
         a1, p1 = _recv(sock)
         a2, p2 = _recv(sock)
         assert a1 == "/input/Vertical" and p1[0] == pytest.approx(1.0)

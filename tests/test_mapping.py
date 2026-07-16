@@ -42,7 +42,6 @@ def _line(m, a, b, step=0.05):
 
 # ---- セグメント分割(キャプチャ一時停止) --------------------------------
 def test_break_segment_prevents_connecting_line():
-    # 2本の離れた壁区間を、間に break を挟んで記録する
     m = RoomMapper(min_move=0.0)
     _line(m, (0.0, 0.0), (1.0, 0.0))  # 区間1
     m.break_segment()
@@ -246,9 +245,9 @@ def test_save_trims_dangling_trailing_kind(tmp_path):
     # セグメントの kind が残る(_kind が点を持つセグメント数より1多い)。
     m = RoomMapper(min_move=0.0)
     _line(m, (0.0, 0.0), (2.0, 0.0))  # outer の壁区間(seg 0)
-    m.set_mode("inner")               # 点があるのでペンアップ → 空の inner を作る
-    assert m.num_segments == 1                       # 点のあるセグメントは1つ
-    assert len(m._kind) == m.num_segments + 1        # 末尾に宙ぶらりんの kind
+    m.set_mode("inner")  # 点があるのでペンアップ → 空の inner を作る
+    assert m.num_segments == 1  # 点のあるセグメントは1つ
+    assert len(m._kind) == m.num_segments + 1  # 末尾に宙ぶらりんの kind
     assert m.segment_kinds() == ["outer"]
 
     m.save(tmp_path / "room")
@@ -257,7 +256,7 @@ def test_save_trims_dangling_trailing_kind(tmp_path):
     assert len(data["kind"]) == int(data["seg"].max()) + 1
 
     loaded = RoomMapper.load(tmp_path / "room")
-    assert loaded.segment_kinds() == m.segment_kinds()   # 往復で不変
+    assert loaded.segment_kinds() == m.segment_kinds()  # 往復で不変
 
 
 def test_kinds_survive_save_load(tmp_path):

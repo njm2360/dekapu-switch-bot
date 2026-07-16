@@ -1,13 +1,7 @@
-"""同定済みプラントに対する正対ループのオフライン検証(実機不要)。
+"""同定済みプラント(plant.json)上で正対ループを回すオフラインゲイン検証 CLI。
 
-probe-axes が作った plant.json を SimulatedVRChat に読み込み、本番と同じ
-turn_to(_face_loop)を実時間で回して、初期誤差ごとの収束時間・振動回数・
-オーバーシュートを表にする。PID ゲインは patrol-buttons と同じフラグで
-上書きできるので、実機に持ち込む前にゲインの当たりをここで付ける。
-
-例:
-    sim-face --model logs/probe_XXXX/plant.json
-    sim-face --model ... --turn-kp 0.05 --turn-deadzone 0.5 --yaw-err 30,5,2
+本番と同じ turn_to を回し、初期誤差ごとの収束時間・振動・オーバーシュートを表にする。
+PID ゲインは patrol-buttons と同じフラグで上書きできる(実機前の当たり付け用)。
 """
 
 import argparse
@@ -73,7 +67,7 @@ def main() -> None:
             err,  # sim は yaw=0 で始まるので目標=初期誤差
             gains,
             face_controllers(gains),
-            pitch_deg=args.pitch_err,  # sim は pitch=0 で始まるので目標=初期誤差
+            pitch_deg=args.pitch_err,  # 同上(pitch も 0 始まり)
             clock=SimClock(sim),
             recorder=recorder,
             name=f"err{err:g}",

@@ -7,8 +7,7 @@ class PID:
     """離散 PID。
 
     update(error, dt) を毎周期呼ぶ。出力は [out_min, out_max] の範囲に収める。
-    積分項は i_limit で絶対値を制限し、出力が上限/下限に張り付いている間は積分を
-    止める(積分が溜まりすぎて指令が行き過ぎるのを防ぐ)。
+    積分項は i_limit で絶対値を制限し、出力飽和中は積分を止める(ワインドアップ防止)。
     """
 
     kp: float
@@ -17,8 +16,8 @@ class PID:
     out_min: float = -1.0
     out_max: float = 1.0
     i_limit: float = 1.0  # 積分項(ki*∫e)の絶対値上限
-    # 出力の不感帯補償。>0 なら、非ゼロの出力を最低でも out_deadzone まで底上げする
-    # (VRChat の視点軸のように、一定値以下がほとんど反応しない機器の不感帯を打ち消す)。
+    # 出力の不感帯補償。>0 なら非ゼロ出力を最低 out_deadzone まで底上げする
+    # (VRChat 視点軸のような機器側不感帯を打ち消す)。
     out_deadzone: float = 0.0
     _i: float = field(default=0.0, init=False, repr=False)
     _prev: float | None = field(default=None, init=False, repr=False)
@@ -34,8 +33,7 @@ class PID:
         self.last_p = self.last_i = self.last_d = self.last_out = 0.0
 
     def reset_derivative(self) -> None:
-        """微分履歴だけをリセットする(積分は保持)。目標が急に変わったときに
-        微分項が大きく跳ねるのを抑えるために使う。"""
+        """微分履歴のみリセット(積分は保持)。目標急変時の微分キック抑制用。"""
         self._prev = None
 
     def update(self, error: float, dt: float) -> float:
@@ -63,9 +61,7 @@ class PID:
 
         i = self.ki * self._i
         out = max(self.out_min, min(self.out_max, p + i + d))
-        # 不感帯補償: 非ゼロの出力を最低 out_deadzone まで底上げして、ほとんど反応しない
-        # 範囲を飛び越える。生の出力が大きいほど 1 に近づき、ごく小さい出力でちょうど
-        # out_deadzone になる(符号は保持)。
+        # 不感帯補償: 非ゼロ出力を [out_deadzone, 1] へ線形リマップ(符号保持)
         if self.out_deadzone > 0.0 and abs(out) > 1e-3:
             out = math.copysign(
                 self.out_deadzone + (1.0 - self.out_deadzone) * min(abs(out), 1.0), out

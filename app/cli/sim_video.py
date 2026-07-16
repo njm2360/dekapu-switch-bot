@@ -1,11 +1,7 @@
-"""シミュレーションのフレームCSVを「一人称3D + 上面2D地図」の並置動画にする。
+"""フレームCSVを「一人称3D + 上面2D地図」の並置動画にする CLI。
 
 左は占有グリッドへのDDAレイキャスティング(擬似3D)、右は歩行可能グリッド上の
 軌跡・現在位置・目標点。rawvideo を ffmpeg に直接パイプして mp4 を書く。
-
-例:
-    sim-video --csv frames.csv --map maps/XXXX/room.npz --out out.mp4
-    sim-video --csv frames.csv --out traj_only.mp4 --speed 2
 """
 
 import argparse

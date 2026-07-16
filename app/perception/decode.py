@@ -35,7 +35,7 @@ class DecodeResult:
         return self.status is DecodeStatus.OK
 
 
-# ブロック中心座標と MSB-左のパック重み(定数なので一度だけ計算する)。
+# ブロック中心座標と MSB-左のパック重み。
 _half = BLOCK // 2
 _CX = OFFSET_X + np.arange(COLS) * BLOCK + _half  # (cols,)
 _CY = OFFSET_Y + np.arange(ROWS) * BLOCK + _half  # (rows,)
@@ -56,7 +56,6 @@ def sample_bits(frame: np.ndarray) -> np.ndarray:
         raise ValueError(
             f"frame {frame.shape[:2]} too small for grid (need >= {need_h}x{need_w})"
         )
-    # (rows, cols, C) をまとめて取り出す。C はRGBの先頭3chのみ使用。
     samples = frame[np.ix_(_CY, _CX)][:, :, :3].astype(np.uint16)
     rgb_sum = samples.sum(axis=2)  # (rows, cols)
     return rgb_sum > THRESHOLD

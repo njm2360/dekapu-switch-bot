@@ -68,10 +68,9 @@ def aim_angle(
 
 
 def forward_factor(yaw_err_deg: float, cutoff_deg: float = 90.0) -> float:
-    """前進速度の減衰係数 [0,1]。正対で1、横向きで0(cos ベースで滑らか)。
+    """前進速度の減衰係数 [0,1]。正対で1、|yaw_err| >= cutoff で0(cos ベース)。
 
-    その場停止→旋回のガクつきを避けるため、向きのズレに応じて滑らかに減速する。
-    |yaw_err| >= cutoff で 0。
+    その場停止→旋回のガクつきを避け、向きのズレに応じて滑らかに減速する。
     """
     a = abs(yaw_err_deg)
     if a >= cutoff_deg:

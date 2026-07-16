@@ -283,7 +283,7 @@ def main() -> None:
     _add_gain_args(parser)
     args = parser.parse_args()
 
-    # チューニング定数を1オブジェクトに集約(フラグは PatrolGains の既定を上書き)。
+    # フラグ値で PatrolGains の既定を上書き
     gains = PatrolGains(
         **{f.name: getattr(args, f.name) for f in dataclasses.fields(PatrolGains)}
     )

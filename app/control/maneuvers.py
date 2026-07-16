@@ -123,9 +123,9 @@ class NavResult:
     reached: bool  # 経路が見つかった(到達可能)
     arrived: bool  # 最終ウェイポイント付近まで到達した
     reason: str  # "arrived" | "unreachable" | "no_pose" | "hud_lost" | "timeout"
-    path: Path | None  # 計画した経路(follow() 直接指定時は None)
-    elapsed: float  # 追従に要した秒
-    frames: int  # 処理フレーム数
+    path: Path | None  # follow() 直接指定時は None
+    elapsed: float  # [s]
+    frames: int
     yaw: AxisMetrics | None = (
         None  # 進行方向 yaw の応答指標(制御フレームが無ければ None)
     )
@@ -138,8 +138,8 @@ class AimResult:
     pitch_err: float  # 最終 pitch 誤差[deg]
     elapsed: float
     frames: int
-    yaw: AxisMetrics | None = None  # yaw 軸の応答指標
-    pitch: AxisMetrics | None = None  # pitch 軸の応答指標(pitch 未制御時は None)
+    yaw: AxisMetrics | None = None
+    pitch: AxisMetrics | None = None  # pitch 未制御時は None
     reason: str = ""  # "converged" | "timeout" | "hud_lost" | "stuck"(align のみ)
 
 
@@ -226,7 +226,7 @@ def follow_path(
                 logger.warning("[%s] nav timeout", name)
                 break
     finally:
-        # 例外(Ctrl+C・OSC/マウスエラー等)で抜けてもアバターを確実に止める
+        # 中断時も必ず停止
         look.stop()
         move.stop()
     elapsed = clock.monotonic() - t0
@@ -290,7 +290,7 @@ def follow_path_hold_view(
             while idx < len(wps) - 1 and _dist(cur, wps[idx]) < gains.arrive:
                 idx += 1
             if idx != prev_idx:
-                # 目標が急に変わったとき前後・左右の誤差が跳ねて D 項がスパイクするのを防ぐ
+                # 目標切替で誤差が跳ねたときの微分キックを防ぐ
                 ctl.forward.reset_derivative()
                 ctl.strafe.reset_derivative()
             target = wps[idx]
@@ -299,7 +299,7 @@ def follow_path_hold_view(
             if final and dist < gains.arrive:
                 break
 
-            # 目標への世界誤差を、現在の体の向きで前方向/右方向へ射影する(視点は回さない)
+            # 世界系の目標誤差を体の前/右方向へ射影
             ex, ez = target[0] - cur[0], target[1] - cur[1]
             yr = math.radians(pose.yaw_deg)
             fwd_err = ex * math.sin(yr) + ez * math.cos(yr)
@@ -308,7 +308,7 @@ def follow_path_hold_view(
             fwd = ctl.forward.update(fwd_err, dt)
             strafe = ctl.strafe.update(right_err, dt)
             move.move(forward=fwd, strafe=strafe)
-            look.look(0.0, 0.0)  # 視点はゼロ指令で保持(前フェーズの残留指令も打ち消す)
+            look.look(0.0, 0.0)  # ゼロ指令で前フェーズの残留視点指令を打ち消す
 
             if track:
                 rec.row(
@@ -335,7 +335,7 @@ def follow_path_hold_view(
                 logger.warning("[%s] move timeout", name)
                 break
     finally:
-        # 例外で抜けても移動・視点を確実に止める
+        # 中断時も必ず停止
         move.stop()
         look.stop()
     elapsed = clock.monotonic() - t0
@@ -378,9 +378,7 @@ def _face_loop(
     extra は記録行に足す列(aim_at のターゲット座標など)。
     """
     rec = recorder or NullRecorder()
-    track = not isinstance(
-        rec, NullRecorder
-    )  # 記録先が無ければ行組立も指標計算もしない
+    track = not isinstance(rec, NullRecorder)  # 記録先が無ければ指標計算もしない
     face.yaw.reset()
     face.pitch.reset()
     last_t: int | None = None
@@ -443,7 +441,7 @@ def _face_loop(
                 if pitch_acc is not None:
                     pitch_acc.update(pitch_err, pitch_cmd, now - t0, dt, gains.face_tol)
     finally:
-        # 例外で抜けても視点の回転を確実に止める
+        # 中断時も必ず停止
         look.stop()
     elapsed = clock.monotonic() - t0
     logger.debug(
@@ -483,15 +481,13 @@ def strafe_align(
 ) -> AimResult:
     """最終照準: 視点(yaw)は回さず、体の横移動で誤差を潰す。
 
-    視点軸は指令0.50以下が効かず、不感帯補償するとリミットサイクルになる
-    (gain-tuning.md 参照)。移動軸は連続的に効くため、粗い正対(aim_at)後の
-    残り yaw 誤差を横ずれ e = dist·sin(yaw_err)[m] に換算して横移動で吸収
-    すれば発振が原理的に出ない。pitch は従来どおり視点で合わせる。
+    視点軸は不感帯(0.50)のためリミットサイクルを避けられない。残り yaw 誤差を
+    横ずれ e = dist·sin(yaw_err)[m] に換算し、連続的に効く移動軸で吸収する
+    (根拠は gain-tuning.md)。pitch は視点で合わせる。
 
     収束: |e| < align_tol かつ |pitch_err| < face_tol を settle 回連続。
-    角のボタン等で移動方向が壁に塞がれた場合は、指令を出しても
-    align_stuck_time 秒間 align_stuck_eps[m] 以上動けないことを検出して
-    打ち切る(reason="stuck"。デッドロック防止)。
+    壁に塞がれ align_stuck_time 秒間 align_stuck_eps[m] 以上動けなければ
+    reason="stuck" で打ち切る。
     """
     rec = recorder or NullRecorder()
     track = not isinstance(rec, NullRecorder)
@@ -507,8 +503,7 @@ def strafe_align(
     yaw_err = pitch_err = 0.0
     lat_acc = AxisAccumulator() if track else None
     pitch_acc = AxisAccumulator() if track else None
-    # スタック検出: 窓の開始時刻・窓内の移動経路長Σ|Δpos|・指令を出したかを追跡する
-    # (経路長で見ると、その場往復や微速クロールを「動けていない」と誤判定しない)
+    # スタック検出は窓内の移動経路長Σ|Δpos|で見る(その場往復や微速移動を誤判定しない)
     win_t = t0
     win_prev: tuple[float, float] | None = None
     win_path = 0.0
@@ -535,13 +530,12 @@ def strafe_align(
             else:
                 settle = 0
 
-            # 目標が右(+)なら右へ動くと視線上に乗る
             strafe_cmd = strafe.update(lat_err, dt)
             pitch_cmd = face.pitch.update(pitch_err, dt)
             move.move(strafe=strafe_cmd)
             look.look(0.0, pitch_cmd)
 
-            # スタック検出(壁に押し付けて動けない)
+            # スタック検出
             if win_prev is None:
                 win_t, win_prev = now, cur
             else:
@@ -584,7 +578,7 @@ def strafe_align(
                 lat_acc.update(lat_err, strafe_cmd, now - t0, dt, gains.align_tol)
                 pitch_acc.update(pitch_err, pitch_cmd, now - t0, dt, gains.face_tol)
     finally:
-        # 例外で抜けても移動・視点を確実に止める
+        # 中断時も必ず停止
         move.stop()
         look.stop()
     elapsed = clock.monotonic() - t0

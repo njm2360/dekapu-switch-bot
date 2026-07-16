@@ -1,21 +1,12 @@
 """実機プラントのシステム同定(プローブ注入 → 特性抽出 → モデル保存)。
 
-probe: 1軸に階段状の指令列(ProbeSegment)を注入し、HUD ポーズ時系列を記録する。
-yaw は時間ベース(run_axis_probe)、pitch は ±90° クランプ回避の角度ガード付き
-(run_pitch_probe)、移動軸は位置ガード付き(run_move_probe)。
-identify: 記録から「指令→定常速度」の静特性・むだ時間・フレーム間隔 dt 列を
-抽出して AxisModel / PlantModel(JSON 保存可)にまとめる。simplant.SimulatedVRChat
-がこのモデルを積分すると、実機なしでゲイン検証できるプラントになる。
-
-run_axis_probe は PoseSource と send コールバック(+クロック)の抽象にしか
-依存しないので、模擬プラントと模擬クロックを渡せばヘッドレスでも走る
-(tests/test_sysid.py では、特性が既知の合成プラントをプローブ → 同定して、
-元の特性と一致することを確認している)。
+階段状の指令列を1軸に注入して HUD ポーズ時系列を記録し、「指令→定常速度」の
+静特性・むだ時間・フレーム間隔 dt 列を AxisModel / PlantModel に抽出する。
+simplant.SimulatedVRChat がこのモデルを積分すると実機なしでゲイン検証できる。
 
 むだ時間は OSC→ゲーム反映→描画→キャプチャ→デコードの合計、つまり制御器から
-見えるループ遅延そのものを測る(センサ経路が本番と同一なため)。同定するのは
-静特性・むだ時間・dt 分布のみで、視点軸に時間方向の平滑化(ランプ)があると
-モデル化から漏れる(ステップ応答のプロットで顕著なら要拡張)。
+見えるループ遅延そのもの。視点軸に時間方向の平滑化(ランプ)があるとモデル化
+から漏れる。手法の詳細は docs/system-identification.md を参照。
 """
 
 import csv
@@ -36,7 +27,7 @@ from ..control.maneuvers import PoseSource
 logger = logging.getLogger(__name__)
 
 AXES = ("yaw", "pitch", "forward", "strafe")
-# VRChat の /input/ 軸名(プローブ CLI が osc.axis() に渡す)
+# VRChat の /input/ 軸名
 AXIS_INPUT = {
     "yaw": "LookHorizontal",
     "pitch": "LookVertical",
@@ -66,8 +57,8 @@ class ProbeSegment:
 
 @dataclass(frozen=True)
 class ProbeSample:
-    seg: int  # セグメント番号
-    cmd: float  # そのセグメントの指令値
+    seg: int
+    cmd: float
     t: float  # プローブ開始からの受信秒(実時間)
     time_ms: int
     x: float
@@ -262,10 +253,8 @@ def run_axis_probe(
 ) -> ProbeRun:
     """スケジュールを注入しながらポーズ時系列を記録する(1軸)。
 
-    視点軸はその場で回るだけなのでスペースを取らない。移動軸には、位置ガードで
-    行動範囲を絞る run_move_probe を使う。send は「軸へ指令値を送る」コール
-    バック(実機なら osc.axis、テストなら模擬プラント)。monotonic / sleep を
-    差し替えるとヘッドレスで走る。
+    時間ベースなので視点軸向け。移動軸には位置ガードで行動範囲を絞る
+    run_move_probe を使う。monotonic / sleep を差し替えるとヘッドレスで走る。
     """
     rec = _ProbeRecorder(
         reader,

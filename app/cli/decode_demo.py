@@ -1,9 +1,4 @@
-"""VRChat PoseTelemetryHUD デコーダの CLI デモ。
-
-使い方:
-    uv run decode-demo            # VRChat ウィンドウを読み続けて表示(Ctrl+C で停止)
-    uv run decode-demo --stats    # 1秒ごとに統計(fps/成功率など)も表示
-"""
+"""VRChat PoseTelemetryHUD を読み続けてポーズを表示する CLI デモ(--stats で統計も)。"""
 
 import argparse
 import time

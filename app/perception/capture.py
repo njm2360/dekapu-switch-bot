@@ -47,16 +47,16 @@ def _enable_dpi_awareness() -> None:
     try:
         ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
         return
-    except (AttributeError, OSError):
+    except AttributeError, OSError:
         pass
     try:
         ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PROCESS_PER_MONITOR_DPI_AWARE
         return
-    except (AttributeError, OSError):
+    except AttributeError, OSError:
         pass
     try:
         ctypes.windll.user32.SetProcessDPIAware()
-    except (AttributeError, OSError):
+    except AttributeError, OSError:
         pass
 
 
@@ -68,7 +68,6 @@ def find_window_rect(title: str = "VRChat") -> tuple[int, int, int, int] | None:
 
     user32 = ctypes.windll.user32
 
-    # まず完全一致で FindWindow、ダメなら可視ウィンドウを走査して部分一致
     hwnd = user32.FindWindowW(None, title)
     if not hwnd:
         hwnd = _find_window_substring(title)
