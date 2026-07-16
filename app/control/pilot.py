@@ -73,6 +73,7 @@ class Pilot:
         reader = PoseReader(source=WindowsVRChatCapture()).start()
         osc = VRChatOSC()
         osc.hud_enable(True)
+        osc.run(True)
         return cls(
             grid,
             reader,

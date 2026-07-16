@@ -47,6 +47,9 @@ class VRChatOSC:
         self.button("Jump", True)
         self.button("Jump", False)
 
+    def run(self, on: bool = True) -> None:
+        self.button("Run", on)
+
     def press(self) -> None:
         self.button("UseRight", True)
 
@@ -67,6 +70,7 @@ class VRChatOSC:
 
     def close(self) -> None:
         self.stop()
+        self.run(False)
 
     def __enter__(self) -> "VRChatOSC":
         return self
