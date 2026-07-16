@@ -517,12 +517,18 @@ class AxisModel:
     unit: str  # "deg/s" | "m/s"
     points: list[tuple[float, float]]  # (指令, 定常速度) 指令の昇順
     deadtime_s: float = 0.0
+    # rate() の補間配列キャッシュ。points はリスト差し替えで更新する前提
+    # (ストレス試験の流儀)。要素の in-place 変更は検知できない
+    _cache: tuple | None = field(default=None, init=False, repr=False, compare=False)
 
     def rate(self, cmd: float) -> float:
         """指令値 → 定常速度(測定点間は線形補間、範囲外は端の値)。"""
-        xs = [p[0] for p in self.points]
-        ys = [p[1] for p in self.points]
-        return float(np.interp(cmd, xs, ys))
+        c = self._cache
+        if c is None or c[0] is not self.points:
+            xs = np.asarray([p[0] for p in self.points], dtype=np.float64)
+            ys = np.asarray([p[1] for p in self.points], dtype=np.float64)
+            self._cache = c = (self.points, xs, ys)
+        return float(np.interp(cmd, c[1], c[2]))
 
 
 def identify_axis(

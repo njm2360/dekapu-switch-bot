@@ -152,6 +152,19 @@ def raycast(
     return np.clip(dist * cell, 1e-3, MAX_DIST), side
 
 
+_RAY_CACHE: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+
+
+def _ray_angles(w: int) -> tuple[np.ndarray, np.ndarray]:
+    """画面幅 w に対する各列の相対角と cos(魚眼補正)。フレーム不変なのでキャッシュ。"""
+    hit = _RAY_CACHE.get(w)
+    if hit is None:
+        half = math.radians(FOV_DEG / 2)
+        rel = np.arctan(np.linspace(-math.tan(half), math.tan(half), w))  # 左→右
+        hit = _RAY_CACHE[w] = (rel, np.cos(rel))
+    return hit
+
+
 def render_3d(
     solid: np.ndarray,
     grid: NavGrid,
@@ -166,12 +179,12 @@ def render_3d(
 ) -> np.ndarray:
     """一人称ビュー(h, w, 3)を描く。yaw規約: +Z基準で+右回り、dir=(sin,cos)。"""
     half = math.radians(FOV_DEG / 2)
-    rel = np.arctan(np.linspace(-math.tan(half), math.tan(half), w))  # 左→右
+    rel, cos_rel = _ray_angles(w)
     ang = math.radians(yaw) + rel
     dirs = np.stack([np.sin(ang), np.cos(ang)], axis=1)
     b = grid.bounds
     dist, side = raycast(solid, grid.cell, b.xmin, b.zmin, x, z, dirs)
-    perp = dist * np.cos(rel)  # 魚眼補正
+    perp = dist * cos_rel  # 魚眼補正
 
     vhalf = math.atan(math.tan(half) * h / w)  # 垂直半FOV
     horizon = h / 2 + (h / 2) * math.tan(math.radians(pitch)) / math.tan(vhalf)
@@ -327,9 +340,8 @@ AXES = [
 def draw_hud(frame: np.ndarray, d: dict, idx: int, hud_h: int) -> np.ndarray:
     """下部にアクチュエータ4軸バー(不感帯目盛りつき)・フェーズ・誤差・PID内訳を描く。"""
     h, w, _ = frame.shape
-    y0 = h - hud_h
-    frame[y0:, :] = (18, 18, 22)
-    img = Image.fromarray(frame)
+    strip = np.full((hud_h, w, 3), (18, 18, 22), np.uint8)
+    img = Image.fromarray(strip)
     dr = ImageDraw.Draw(img)
     cx = w // 4 + 30
     bw = w // 4 - 80
@@ -351,7 +363,7 @@ def draw_hud(frame: np.ndarray, d: dict, idx: int, hud_h: int) -> np.ndarray:
         )
 
     for k, (col, label, onset, color) in enumerate(AXES):
-        bar(y0 + 6 + 20 * k, d[col][idx], onset, color, label)
+        bar(6 + 20 * k, d[col][idx], onset, color, label)
 
     def f(v, fmt="+6.1f"):
         return format(v, fmt) if math.isfinite(v) else "-"
@@ -360,12 +372,10 @@ def draw_hud(frame: np.ndarray, d: dict, idx: int, hud_h: int) -> np.ndarray:
     tx0 = w // 2 + 10
     dt_ms = d["dt"][idx] * 1e3
     wp = d["wp"][idx]
-    dr.text((tx0, y0 + 6), f"t={d['t'][idx]:7.2f}s", fill=(220, 220, 220))
+    dr.text((tx0, 6), f"t={d['t'][idx]:7.2f}s", fill=(220, 220, 220))
+    dr.text((tx0 + 88, 6), phase or "?", fill=PHASE_COLOR.get(phase, (200, 200, 200)))
     dr.text(
-        (tx0 + 88, y0 + 6), phase or "?", fill=PHASE_COLOR.get(phase, (200, 200, 200))
-    )
-    dr.text(
-        (tx0 + 136, y0 + 6),
+        (tx0 + 136, 6),
         f"{d['target'][idx]}{f' wp{int(wp)}' if math.isfinite(wp) else ''}"
         f"  dt={f(dt_ms, '.0f')}ms",
         fill=(
@@ -373,26 +383,27 @@ def draw_hud(frame: np.ndarray, d: dict, idx: int, hud_h: int) -> np.ndarray:
         ),
     )
     dr.text(
-        (tx0, y0 + 26),
+        (tx0, 26),
         f"yaw_err={f(d['yaw_err'][idx])}  pitch_err={f(d['pitch_err'][idx])}  "
         f"lat={f(d['lat_err'][idx], '+.3f')}m  dist={f(d['dist'][idx], '.2f')}m",
         fill=(220, 220, 220),
     )
     ax = "strafe" if phase == "align" else "turn"  # アクティブ軸の PID 内訳
     dr.text(
-        (tx0, y0 + 46),
+        (tx0, 46),
         f"{ax}  P={f(d[ax + '_p'][idx], '+.3f')}  I={f(d[ax + '_i'][idx], '+.3f')}"
         f"  D={f(d[ax + '_d'][idx], '+.3f')}",
         fill=(180, 180, 200),
     )
     dr.text(
-        (tx0, y0 + 66),
+        (tx0, 66),
         f"ff={f(d['fwd_factor'][idx], '.2f')}  "
         f"yaw_rate={f(d['yaw_rate'][idx], '+.1f')}deg/s  "
         f"v={f(d['speed_ms'][idx], '.2f')}m/s",
         fill=(180, 200, 180),
     )
-    return np.asarray(img)
+    frame[h - hud_h :] = np.asarray(img)
+    return frame
 
 
 def sorted_box(x0, x1, y0, y1):
