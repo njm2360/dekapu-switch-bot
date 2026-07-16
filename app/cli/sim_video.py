@@ -26,6 +26,10 @@ FLOOR = np.array([76, 70, 60], np.uint8)
 WALL = np.array([170, 150, 120], np.float64)
 TARGET_COLOR = (255, 80, 40)
 
+TARGET_PHASES = frozenset({"face", "align"})
+TARGET_MIN_PX = 6  # マーカー一辺の下限[px]
+TARGET_MAX_PX = 20  # 視界塞ぎ防止の上限
+
 CROSSHAIR = (235, 235, 235)
 CROSSHAIR_EDGE = (20, 20, 20)
 CROSSHAIR_GAP = 3  # 中心の空き[px](半径)
@@ -40,7 +44,9 @@ FLOOR_2D = (60, 66, 78)
 NEED = ["t", "x", "z", "yaw", "pitch"]
 # 任意列(無い/空欄は NaN)。ControlLog の全フェーズ列に対応する
 OPTIONAL = [
+    "y",
     "tx",
+    "ty",
     "tz",
     "dt",
     "dist",
@@ -204,15 +210,18 @@ def render_3d(
     solid: np.ndarray,
     grid: NavGrid,
     x: float,
+    y: float,
     z: float,
     yaw: float,
     pitch: float,
-    tx: float,
-    tz: float,
+    target: tuple[float, float, float] | None,
     w: int,
     h: int,
 ) -> np.ndarray:
-    """一人称ビュー(h, w, 3)を描く。yaw規約: +Z基準で+右回り、dir=(sin,cos)。"""
+    """一人称ビュー(h, w, 3)を描く。yaw規約: +Z基準で+右回り、dir=(sin,cos)。
+
+    target は世界座標 (tx, ty, tz) か None。y は視点高さで、目標の投影に使う。
+    """
     half = math.radians(FOV_DEG / 2)
     rel, cos_rel = _ray_angles(w)
     ang = math.radians(yaw) + rel
@@ -237,24 +246,53 @@ def render_3d(
     mask = (rows >= top[None, :]) & (rows < bot[None, :])
     img[mask] = np.broadcast_to(wall_rgb[None, :, :], (h, w, 3))[mask]
 
-    # 目標点ビルボード(壁より手前なら描く。目標なし=NaN はスキップ)
-    if math.isfinite(tx) and math.isfinite(tz):
-        dx, dz = tx - x, tz - z
-        tdist = math.hypot(dx, dz)
-        trel = math.atan2(dx, dz) - math.radians(yaw)
-        trel = (trel + math.pi) % (2 * math.pi) - math.pi
-        if tdist > 0.05 and abs(trel) < half:
-            col = int((math.tan(trel) / math.tan(half) + 1) / 2 * (w - 1))
-            if tdist < dist[col] + 0.3:
-                tperp = tdist * math.cos(trel)
-                size = int(np.clip((h * 0.25) / max(tperp, 0.2), 3, h // 3))
-                cy = int(horizon + (h * 0.45) / max(tperp, 0.2))  # 床レベル付近
-                y0, y1 = max(0, cy - size), min(h, cy)
-                x0, x1 = max(0, col - size // 3), min(w, col + size // 3 + 1)
-                if y0 < y1 and x0 < x1:
-                    img[y0:y1, x0:x1] = TARGET_COLOR
+    # 目標マーカー(壁より手前なら描く)。高さ ty を使って実際の仰角に投影するので、
+    # クロスヘアとの重なりがそのまま照準誤差(yaw_err/pitch_err)になる。
+    if target is not None:
+        draw_target(img, target, x, y, z, yaw, half, vhalf, horizon, dist)
     draw_crosshair(img)
     return img
+
+
+def draw_target(
+    img: np.ndarray,
+    target: tuple[float, float, float],
+    x: float,
+    y: float,
+    z: float,
+    yaw: float,
+    half: float,
+    vhalf: float,
+    horizon: float,
+    dist: np.ndarray,
+) -> None:
+    """目標を中空の矩形で描く。中空なのはクロスヘアを覆い隠さないため。"""
+    tx, ty, tz = target
+    if not (math.isfinite(tx) and math.isfinite(tz)):
+        return
+    h, w, _ = img.shape
+    dx, dz = tx - x, tz - z
+    tdist = math.hypot(dx, dz)
+    trel = math.atan2(dx, dz) - math.radians(yaw)
+    trel = (trel + math.pi) % (2 * math.pi) - math.pi
+    if tdist <= 0.05 or abs(trel) >= half:
+        return
+    col = int((math.tan(trel) / math.tan(half) + 1) / 2 * (w - 1))
+    if tdist >= dist[col] + 0.3:  # 壁の裏
+        return
+    perp = max(tdist * math.cos(trel), 0.05)
+    # 仰角 atan(dy/perp) を壁と同じピッチ規約(horizon 基準のシア)で行に落とす
+    dy = (ty - y) if math.isfinite(ty) and math.isfinite(y) else 0.0
+    row = int(horizon - (h / 2) * (dy / perp) / math.tan(vhalf))
+    size = int(
+        np.clip(2.0 / perp * (w / 2) / math.tan(half), TARGET_MIN_PX, TARGET_MAX_PX)
+    )
+    r = size // 2
+    box = Image.fromarray(img)
+    ImageDraw.Draw(box).rectangle(
+        [col - r, row - r, col + r, row + r], outline=TARGET_COLOR, width=2
+    )
+    img[:] = np.asarray(box)
 
 
 # ---- 2D地図 ---------------------------------------------------------------
@@ -517,15 +555,20 @@ def main() -> None:
         for k, i in enumerate(idxs):
             frame = np.empty((h, w, 3), np.uint8)
             if solid is not None:
+                tgt = (
+                    (d["tx"][i], d["ty"][i], d["tz"][i])
+                    if d["phase"][i] in TARGET_PHASES
+                    else None
+                )
                 frame[:view_h, :half_w] = render_3d(
                     solid,
                     grid,
                     d["x"][i],
+                    d["y"][i],
                     d["z"][i],
                     d["yaw"][i],
                     d["pitch"][i],
-                    d["tx"][i],
-                    d["tz"][i],
+                    tgt,
                     half_w,
                     view_h,
                 )
