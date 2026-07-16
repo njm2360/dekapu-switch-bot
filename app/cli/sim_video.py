@@ -26,6 +26,11 @@ FLOOR = np.array([76, 70, 60], np.uint8)
 WALL = np.array([170, 150, 120], np.float64)
 TARGET_COLOR = (255, 80, 40)
 
+CROSSHAIR = (235, 235, 235)
+CROSSHAIR_EDGE = (20, 20, 20)
+CROSSHAIR_GAP = 3  # 中心の空き[px](半径)
+CROSSHAIR_LEN = 8  # 各腕の長さ[px]
+
 WALL_2D = (190, 170, 140)
 MARGIN_2D = (58, 44, 48)
 FLOOR_2D = (60, 66, 78)
@@ -165,6 +170,36 @@ def _ray_angles(w: int) -> tuple[np.ndarray, np.ndarray]:
     return hit
 
 
+def draw_crosshair(img: np.ndarray) -> None:
+    """ビュー中央(=視線方向)に十字を描く。暗い縁取りで背景によらず見えるようにする。"""
+    h, w, _ = img.shape
+    cy, cx = h // 2, w // 2
+    g, ln = CROSSHAIR_GAP, CROSSHAIR_LEN
+
+    def arm(y0, y1, x0, x1, color, pad=0):
+        ys = slice(max(0, y0 - pad), min(h, y1 + pad))
+        xs = slice(max(0, x0 - pad), min(w, x1 + pad))
+        if ys.start < ys.stop and xs.start < xs.stop:
+            img[ys, xs] = color
+
+    for y0, y1, x0, x1 in (
+        (cy, cy + 1, cx - g - ln, cx - g),  # 左
+        (cy, cy + 1, cx + g + 1, cx + g + ln + 1),  # 右
+        (cy - g - ln, cy - g, cx, cx + 1),  # 上
+        (cy + g + 1, cy + g + ln + 1, cx, cx + 1),  # 下
+    ):
+        arm(y0, y1, x0, x1, CROSSHAIR_EDGE, pad=1)
+    for y0, y1, x0, x1 in (
+        (cy, cy + 1, cx - g - ln, cx - g),
+        (cy, cy + 1, cx + g + 1, cx + g + ln + 1),
+        (cy - g - ln, cy - g, cx, cx + 1),
+        (cy + g + 1, cy + g + ln + 1, cx, cx + 1),
+    ):
+        arm(y0, y1, x0, x1, CROSSHAIR)
+    arm(cy, cy + 1, cx, cx + 1, CROSSHAIR_EDGE, pad=1)
+    img[cy, cx] = CROSSHAIR
+
+
 def render_3d(
     solid: np.ndarray,
     grid: NavGrid,
@@ -203,22 +238,22 @@ def render_3d(
     img[mask] = np.broadcast_to(wall_rgb[None, :, :], (h, w, 3))[mask]
 
     # 目標点ビルボード(壁より手前なら描く。目標なし=NaN はスキップ)
-    if not (math.isfinite(tx) and math.isfinite(tz)):
-        return img
-    dx, dz = tx - x, tz - z
-    tdist = math.hypot(dx, dz)
-    trel = math.atan2(dx, dz) - math.radians(yaw)
-    trel = (trel + math.pi) % (2 * math.pi) - math.pi
-    if tdist > 0.05 and abs(trel) < half:
-        col = int((math.tan(trel) / math.tan(half) + 1) / 2 * (w - 1))
-        if tdist < dist[col] + 0.3:
-            tperp = tdist * math.cos(trel)
-            size = int(np.clip((h * 0.25) / max(tperp, 0.2), 3, h // 3))
-            cy = int(horizon + (h * 0.45) / max(tperp, 0.2))  # 床レベル付近
-            y0, y1 = max(0, cy - size), min(h, cy)
-            x0, x1 = max(0, col - size // 3), min(w, col + size // 3 + 1)
-            if y0 < y1 and x0 < x1:
-                img[y0:y1, x0:x1] = TARGET_COLOR
+    if math.isfinite(tx) and math.isfinite(tz):
+        dx, dz = tx - x, tz - z
+        tdist = math.hypot(dx, dz)
+        trel = math.atan2(dx, dz) - math.radians(yaw)
+        trel = (trel + math.pi) % (2 * math.pi) - math.pi
+        if tdist > 0.05 and abs(trel) < half:
+            col = int((math.tan(trel) / math.tan(half) + 1) / 2 * (w - 1))
+            if tdist < dist[col] + 0.3:
+                tperp = tdist * math.cos(trel)
+                size = int(np.clip((h * 0.25) / max(tperp, 0.2), 3, h // 3))
+                cy = int(horizon + (h * 0.45) / max(tperp, 0.2))  # 床レベル付近
+                y0, y1 = max(0, cy - size), min(h, cy)
+                x0, x1 = max(0, col - size // 3), min(w, col + size // 3 + 1)
+                if y0 < y1 and x0 < x1:
+                    img[y0:y1, x0:x1] = TARGET_COLOR
+    draw_crosshair(img)
     return img
 
 
