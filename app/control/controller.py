@@ -99,15 +99,15 @@ class PatrolGains:
     nav_turn_deadzone: float = 0.50
     # ---- 視点固定の並進(hold-view move): 進行方向へ回さず forward/strafe を体フレームで
     #      合成して経路を追う。誤差=目標までの残距離[m]の体フレーム成分。指令上限は speed。 ----
-    hmove_kp: float = 1.0  # 安全域 0.31〜約2(下は不感帯で失速、上は振動)
+    hmove_kp: float = 1.0  # 安全域 0.45〜約2.5(下は不感帯で失速、上は振動)
     hmove_ki: float = 0.0  # 定常外乱が無ければ0(入れると斜めで微小な行き過ぎ)
-    hmove_kd: float = 0.1
+    hmove_kd: float = 0.0  # 打ち消す遅れが無く GM を削るだけ(0.1 で GM ×9→×1.4)
     hmove_ilim: float = 0.3
     # ---- 前進速度(最終ウェイポイントの減速): 誤差=距離[m] ----
     fwd_kp: float = 2.0
     fwd_kd: float = 0.05
     # ---- 正対(face)の yaw: 視点軸が反応しない範囲(0.50)を out_deadzone で飛び越える。
-    #      kd は入れない(むだ時間 39ms では過制動になり、dt スパイク後に tol 境界でリンギングする) ----
+    #      kd は入れない(打ち消す遅れが無く、高周波ゲインを上げて GM を削るだけ) ----
     turn_kp: float = 0.05
     turn_ki: float = 0.005
     turn_kd: float = 0.0

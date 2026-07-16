@@ -1,7 +1,9 @@
 """実機プローブ CLI: VRChat の各入力軸の応答特性を測り PlantModel(plant.json)を作る。
 
 plant.json は出力ディレクトリに生ログがある軸すべてから組むため、1軸だけの
-取り直しや --from-log での再同定ができる。測定値はワールド・アバター・fps 依存。
+取り直しや --from-log での再同定ができる。移動速度はワールド依存(ワールドを
+移るたびに測り直すのでなく calibrate-world で倍率だけ補正する)。視点軸の速度と
+不感帯はクライアント側の設定なのでワールド不変。むだ時間は fps 依存。
 """
 
 import argparse
@@ -42,19 +44,15 @@ def _yaw_schedule(args) -> list:
 
 
 def _move_duration_cap(args) -> float:
-    """移動軸の所要秒の上限(位置ガードで早く切り返せばこれより短い)。
-
-    1レベル = 初回片道(hold) + 往復 passes 回(各 2×2hold) + 戻り(2hold) + settle。
-    """
+    """移動軸の所要秒の上限(位置ガードで早く切り返せばこれより短い)。"""
+    # 1レベル = 初回片道 + 往復 passes 回 + 戻り + settle
     per_level = args.move_hold * (1 + 4 * args.passes + 2) + args.settle
     return len(_parse_levels(args.move_levels)) * per_level
 
 
 def _pitch_duration_cap(args) -> float:
-    """pitch の所要秒の上限(角度ガードで早く切れればこれより短い)。
-
-    1レベル = +振り(hold) + settle + −振り(hold) + settle + 戻り(2hold + settle)。
-    """
+    """pitch の所要秒の上限(角度ガードで早く切れればこれより短い)。"""
+    # 1レベル = ± 各振り(hold+settle) + 戻り(2hold+settle)
     per_level = 2 * (args.pitch_hold + args.settle) + 2 * args.pitch_hold + args.settle
     return len(_parse_levels(args.levels)) * per_level + args.settle
 
@@ -125,7 +123,7 @@ def _identify_and_save(
         )
     if plot:
         _plot_models(plant, out_dir)
-        print(f"  plots: {out_dir}\\<axis>.png")
+        print(f"  plots: {out_dir / '<axis>.png'}")
 
 
 def _run_live(axes: list[str], out_dir: Path, args) -> list[ProbeRun]:
@@ -157,10 +155,7 @@ def _run_live(axes: list[str], out_dir: Path, args) -> list[ProbeRun]:
         for axis in axes:
             send = lambda v, name=AXIS_INPUT[axis]: osc.axis(name, v)
             t_start = time.monotonic()
-            print(
-                f"probe {axis} (/input/{AXIS_INPUT[axis]}): "
-                f"~{_axis_duration_cap(axis, args):.0f}s 以内"
-            )
+            print(f"probe {axis} (/input/{AXIS_INPUT[axis]})")
             try:
                 if axis == "yaw":
                     run = run_axis_probe(reader, send, _yaw_schedule(args), axis=axis)

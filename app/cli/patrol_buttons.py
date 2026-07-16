@@ -101,7 +101,9 @@ def _run_live(grid, targets, args, gains: PatrolGains) -> None:
         if args.look == "mouse"
         else None  # 省略時は OSC
     )
-    pilot = Pilot.connect(grid, gains=gains, look=look, recorder=log)
+    pilot = Pilot.connect(
+        grid, gains=gains, world_cal=args.world_cal, look=look, recorder=log
+    )
     print(f"look={args.look}  waiting for HUD...")
     pilot.wait_for_hud()
     try:
@@ -248,6 +250,11 @@ def main() -> None:
         metavar="X,Y,Z,FACE_YAW",
         help="ボタン座標と向き(複数可)。FACE_YAW=壁の外向き法線[deg](+Z基準)。"
         "その正面 standoff[m] に立つ",
+    )
+    parser.add_argument(
+        "--world-cal",
+        default=None,
+        help="calibrate-worldが出力した JSON。移動速度に合わせてゲインをスケールする",
     )
     parser.add_argument("--cell", type=float, default=0.1, help="グリッド解像度[m]")
     parser.add_argument(

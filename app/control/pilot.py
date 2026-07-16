@@ -22,6 +22,7 @@ from .maneuvers import (
     turn_to,
 )
 from ..spatial.navigation import NavGrid, plan_path
+from ..sysid.worldcal import WorldCalibration
 from .telemetry import NullRecorder, Recorder
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ class Pilot:
         move: MoveActuator,
         *,
         gains: PatrolGains | None = None,
+        world_cal: WorldCalibration | str | None = None,
         recorder: Recorder | None = None,
         osc=None,
         owns_io: bool = False,
@@ -45,6 +47,18 @@ class Pilot:
         self.look = look
         self.move = move
         self.gains = gains or PatrolGains()
+        if world_cal is not None:
+            if not isinstance(world_cal, WorldCalibration):
+                world_cal = WorldCalibration.load(world_cal)
+            applied = world_cal.apply(self.gains)
+            self.gains = applied.gains
+            logger.info(
+                "world_cal 適用: 速度倍率 forward x%.2f / strafe x%.2f",
+                applied.s_forward,
+                applied.s_strafe,
+            )
+            for note in applied.notes:
+                logger.warning("world_cal: %s", note)
         self.recorder = recorder or NullRecorder()
         self._osc = osc
         self._owns_io = owns_io
@@ -59,12 +73,14 @@ class Pilot:
         grid: NavGrid,
         *,
         gains: PatrolGains | None = None,
+        world_cal: WorldCalibration | str | None = None,
         look: LookActuator | None = None,
         recorder: Recorder | None = None,
     ) -> "Pilot":
         """実機 I/O(キャプチャ+OSC)を組んだ Pilot を作る(注入版は __init__)。
 
         look を渡すと視点だけ差し替えられる(例: MouseLookActuator)。省略時は OSC。
+        world_cal は calibrate-world の JSON パス(またはロード済み WorldCalibration)。
         """
         from ..perception.capture import WindowsVRChatCapture
         from .osc import VRChatOSC
@@ -80,6 +96,7 @@ class Pilot:
             look or osc,
             osc,
             gains=gains,
+            world_cal=world_cal,
             recorder=recorder,
             osc=osc,
             owns_io=True,
