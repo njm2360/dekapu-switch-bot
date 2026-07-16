@@ -76,8 +76,8 @@ VRChat 画面(HUDビットグリッド)
 | `control/controller.py` | `AxisController`(PID+tolゲート)/ `PatrolGains` / 制御器ビルダー                        |
 | `control/actuator.py`   | `LookActuator`/`MoveActuator` IF + `MouseLookActuator`(DirectInput)                    |
 | `control/osc.py`        | VRChat への OSC 送信(look/move/stop で両 actuator IF を満たす)                         |
-| `control/telemetry.py`  | `Recorder` IF + `AxisMetrics`/`AxisAccumulator`(応答指標の累積)                        |
-| `control/maneuvers.py`  | 制御ループの部品(`follow_path` / `aim_at` / `turn_to`。ヘッドレスでも動く)             |
+| `control/telemetry.py`  | `Recorder` IF(`ControlLog`=CSV / `ListRecorder`)+ `AxisMetrics`(応答指標)              |
+| `control/maneuvers.py`  | 制御ループの部品(`follow_path`(carrot追従)/ `aim_at` / `strafe_align` / `turn_to`)     |
 | `control/pilot.py`      | `Pilot` ファサード(経路計画+ループ連結。実機 I/O は `connect()` に集約)                |
 
 ### `sysid/` — システム同定・シミュレーション
@@ -97,3 +97,4 @@ VRChat 画面(HUDビットグリッド)
 | `patrol-buttons` | `cli/patrol_buttons.py` | マップ上でボタンを壁を避けて巡回(OSC + PID)                       |
 | `probe-axes`     | `cli/probe_axes.py`     | 入力軸の応答特性を測定し `plant.json` に同定(--from-log で再同定) |
 | `sim-face`       | `cli/sim_face.py`       | 同定プラント上で正対ループを回しゲインを検証(実機不要)            |
+| `sim-video`      | `cli/sim_video.py`      | 制御ログCSVを一人称3D+2D地図の動画に再生(目視確認用)              |
