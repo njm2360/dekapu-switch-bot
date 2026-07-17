@@ -1,6 +1,6 @@
+from app.cli._keys import key_events
 from app.cli._logging import setup_logging
 from app.perception.capture import WindowsVRChatCapture
-from app.cli._keys import key_events
 from app.perception.reader import PoseReader
 from app.spatial.triangulate import Sighting, triangulate
 

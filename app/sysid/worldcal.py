@@ -1,10 +1,10 @@
 import json
 import logging
 import math
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from statistics import median
-from typing import Callable
 
 from ..control.controller import PatrolGains
 from ..control.maneuvers import PoseSource
@@ -227,7 +227,7 @@ class WorldCalibration:
         return path
 
     @classmethod
-    def load(cls, path) -> "WorldCalibration":
+    def load(cls, path) -> WorldCalibration:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         axes = {
             name: ScaleEstimate(

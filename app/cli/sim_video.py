@@ -74,7 +74,7 @@ def load_frames(path: Path) -> dict[str, np.ndarray]:
     def num(v: str) -> float:
         try:
             return float(v)
-        except (TypeError, ValueError) as e:
+        except TypeError, ValueError:
             return math.nan
 
     with path.open(newline="") as f:

@@ -19,9 +19,6 @@ from app.control.controller import (
     strafe_controller,
     translate_controllers,
 )
-from app.core.pose import Pose
-from app.mapping.mapper import Bounds
-from app.spatial.navigation import NavGrid
 from app.control.maneuvers import (
     aim_at,
     follow_path,
@@ -31,6 +28,9 @@ from app.control.maneuvers import (
 )
 from app.control.pilot import Pilot
 from app.control.telemetry import AxisMetrics
+from app.core.pose import Pose
+from app.mapping.mapper import Bounds
+from app.spatial.navigation import NavGrid
 
 
 def _pose(t: int, pos, yaw_deg: float = 0.0, pitch_deg: float = 0.0) -> Pose:

@@ -9,9 +9,12 @@
 import logging
 import math
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Protocol
+from typing import Protocol
 
+from ..core.pose import Pose
+from ..spatial.navigation import Path
 from .actuator import LookActuator, MoveActuator
 from .controller import (
     AxisController,
@@ -21,8 +24,6 @@ from .controller import (
     TranslateControllers,
 )
 from .guidance import forward_factor, heading_error, pitch_error, wrap180
-from ..spatial.navigation import Path
-from ..core.pose import Pose
 from .telemetry import AxisAccumulator, AxisMetrics, NullRecorder, Recorder
 
 logger = logging.getLogger(__name__)

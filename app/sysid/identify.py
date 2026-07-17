@@ -14,10 +14,10 @@ import json
 import logging
 import math
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from statistics import fmean, median
-from typing import Callable
 
 import numpy as np
 
@@ -672,7 +672,7 @@ class PlantModel:
         return path
 
     @classmethod
-    def load(cls, path) -> "PlantModel":
+    def load(cls, path) -> PlantModel:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         # 外れ点の除去は同定時に済んでいる(3点メディアンは非冪等なので再適用しない)
         axes = {

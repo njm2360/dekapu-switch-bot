@@ -107,7 +107,7 @@ class NavGrid:
         cell: float = 0.1,
         avatar_radius: float = 0.25,
         gap_close: float = 0.6,
-    ) -> "NavGrid":
+    ) -> NavGrid:
         """歩行軌跡から歩行可能グリッドを構築する。
 
         軌跡は壁をなぞった跡で、外周だけでなく内壁・柱などの浮いた壁も障害物に含める。

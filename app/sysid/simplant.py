@@ -143,7 +143,7 @@ class SimulatedVRChat:
         )
 
     # ---- 実時間駆動 -------------------------------------------------------
-    def start_realtime(self) -> "SimulatedVRChat":
+    def start_realtime(self) -> SimulatedVRChat:
         """dt 間隔で実時間ステップするバックグラウンドスレッドを開始する。"""
         if self._thread and self._thread.is_alive():
             return self
@@ -167,7 +167,7 @@ class SimulatedVRChat:
             self._thread.join(2.0)
             self._thread = None
 
-    def __enter__(self) -> "SimulatedVRChat":
+    def __enter__(self) -> SimulatedVRChat:
         return self
 
     def __exit__(self, *exc) -> None:

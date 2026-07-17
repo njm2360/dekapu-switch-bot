@@ -1,7 +1,8 @@
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Literal
+from typing import Literal
 
 import numpy as np
 
@@ -53,7 +54,7 @@ class Bounds:
         """Z方向の広がり [m]。"""
         return self.zmax - self.zmin
 
-    def padded(self, pad: float) -> "Bounds":
+    def padded(self, pad: float) -> Bounds:
         return Bounds(
             self.xmin - pad, self.xmax + pad, self.zmin - pad, self.zmax + pad
         )
@@ -447,7 +448,7 @@ class RoomMapper:
         return npz
 
     @classmethod
-    def load(cls, path: str | Path) -> "RoomMapper":
+    def load(cls, path: str | Path) -> RoomMapper:
         """save() で書いた npz から復元する。"""
         data = np.load(Path(path).with_suffix(".npz"))
         m = cls(min_move=float(data["min_move"]) if "min_move" in data else 0.0)
@@ -472,7 +473,7 @@ class RoomMapper:
         return m
 
     @classmethod
-    def from_poses(cls, poses: Iterable[Pose], min_move: float = 0.02) -> "RoomMapper":
+    def from_poses(cls, poses: Iterable[Pose], min_move: float = 0.02) -> RoomMapper:
         m = cls(min_move=min_move)
         for p in poses:
             m.add_pose(p)

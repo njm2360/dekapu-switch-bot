@@ -72,7 +72,7 @@ class VRChatOSC:
         self.stop()
         self.run(False)
 
-    def __enter__(self) -> "VRChatOSC":
+    def __enter__(self) -> VRChatOSC:
         return self
 
     def __exit__(self, *exc) -> None:

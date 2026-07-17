@@ -1,5 +1,5 @@
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Iterable, Sequence
 
 import numpy as np
 
@@ -23,7 +23,7 @@ class Sighting:
     time_ms: int = 0
 
     @classmethod
-    def from_pose(cls, pose: Pose, label: str = "") -> "Sighting":
+    def from_pose(cls, pose: Pose, label: str = "") -> Sighting:
         """Pose の位置=原点・forward=方向としてレイを作る。"""
         d = _normalize(np.asarray(pose.forward, dtype=np.float64))
         return cls(

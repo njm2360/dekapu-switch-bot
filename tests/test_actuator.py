@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.control.actuator import LookActuator, MoveActuator, MouseLookActuator
-from app.control.pid import PID
+from app.control.actuator import LookActuator, MouseLookActuator, MoveActuator
 from app.control.controller import (
     AxisController,
     PatrolGains,
@@ -13,6 +12,7 @@ from app.control.controller import (
     nav_controllers,
 )
 from app.control.osc import VRChatOSC
+from app.control.pid import PID
 
 
 def test_vrchat_osc_satisfies_both_actuator_protocols():

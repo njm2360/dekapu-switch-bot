@@ -3,8 +3,8 @@ import queue
 import threading
 import time
 from collections import deque
+from collections.abc import Iterator
 from dataclasses import dataclass, replace
-from typing import Iterator
 
 import numpy as np
 
@@ -76,7 +76,7 @@ class PoseReader:
         self._frame_times: deque[float] = deque(maxlen=_STATS_WINDOW)
 
     # ---- ライフサイクル -------------------------------------------------
-    def start(self) -> "PoseReader":
+    def start(self) -> PoseReader:
         if self._thread and self._thread.is_alive():
             return self
         self._stop.clear()
@@ -92,7 +92,7 @@ class PoseReader:
             self._thread.join(timeout)
         self.source.close()
 
-    def __enter__(self) -> "PoseReader":
+    def __enter__(self) -> PoseReader:
         return self.start()
 
     def __exit__(self, *exc) -> None:

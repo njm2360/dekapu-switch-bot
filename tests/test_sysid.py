@@ -15,7 +15,7 @@ from app.control.controller import (
     nav_controllers,
 )
 from app.control.maneuvers import aim_at, follow_path, turn_to
-from app.sysid.simplant import SimClock, SimulatedVRChat
+from app.control.telemetry import ListRecorder
 from app.sysid.identify import (
     AxisModel,
     PlantModel,
@@ -34,7 +34,7 @@ from app.sysid.identify import (
     run_pitch_probe,
     save_run,
 )
-from app.control.telemetry import ListRecorder
+from app.sysid.simplant import SimClock, SimulatedVRChat
 
 # VRChat 視点軸ふうの静特性: 0.55 以下はごく遅く、超えると急峻に立ち上がる
 YAW_CURVE = [

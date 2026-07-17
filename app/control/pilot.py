@@ -1,8 +1,10 @@
 import logging
 import math
 import time
-from typing import Iterable
+from collections.abc import Iterable
 
+from ..spatial.navigation import NavGrid, plan_path
+from ..sysid.worldcal import WorldCalibration
 from .actuator import LookActuator, MoveActuator
 from .controller import (
     PatrolGains,
@@ -21,8 +23,6 @@ from .maneuvers import (
     strafe_align,
     turn_to,
 )
-from ..spatial.navigation import NavGrid, plan_path
-from ..sysid.worldcal import WorldCalibration
 from .telemetry import NullRecorder, Recorder
 
 logger = logging.getLogger(__name__)
@@ -76,15 +76,15 @@ class Pilot:
         world_cal: WorldCalibration | str | None = None,
         look: LookActuator | None = None,
         recorder: Recorder | None = None,
-    ) -> "Pilot":
+    ) -> Pilot:
         """実機 I/O(キャプチャ+OSC)を組んだ Pilot を作る(注入版は __init__)。
 
         look を渡すと視点だけ差し替えられる(例: MouseLookActuator)。省略時は OSC。
         world_cal は calibrate-world の JSON パス(またはロード済み WorldCalibration)。
         """
         from ..perception.capture import WindowsVRChatCapture
-        from .osc import VRChatOSC
         from ..perception.reader import PoseReader
+        from .osc import VRChatOSC
 
         reader = PoseReader(source=WindowsVRChatCapture()).start()
         osc = VRChatOSC()
@@ -293,7 +293,7 @@ class Pilot:
                 self._osc.close()
             self.reader.stop()
 
-    def __enter__(self) -> "Pilot":
+    def __enter__(self) -> Pilot:
         return self
 
     def __exit__(self, *exc) -> None:

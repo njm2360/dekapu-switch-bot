@@ -4,11 +4,11 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from app.cli._logging import setup_logging
-from app.perception.capture import WindowsVRChatCapture
 from app.cli._keys import key_events
-from app.mapping.mapper import RoomMapper
+from app.cli._logging import setup_logging
 from app.mapping.live import LiveMap
+from app.mapping.mapper import RoomMapper
+from app.perception.capture import WindowsVRChatCapture
 from app.perception.reader import PoseReader
 
 REWIND_DIST = 0.5  # z を1回押すたびに巻き戻す軌跡長 [m]
@@ -19,7 +19,7 @@ def _handle_key(
     ch: str,
     pause_evt: threading.Event,
     stop_evt: threading.Event,
-    cmd_q: "queue.Queue[str]",
+    cmd_q: queue.Queue[str],
 ) -> None:
     """1キーを解釈する。mapper は触らず、コマンドはキュー経由でメインスレッドへ渡す。
 
@@ -41,7 +41,7 @@ def _handle_key(
 
 
 def _key_thread(
-    pause_evt: threading.Event, stop_evt: threading.Event, cmd_q: "queue.Queue[str]"
+    pause_evt: threading.Event, stop_evt: threading.Event, cmd_q: queue.Queue[str]
 ) -> None:
     for ch in key_events():
         _handle_key(ch, pause_evt, stop_evt, cmd_q)
@@ -55,7 +55,7 @@ def main() -> None:
     mapper = RoomMapper()
     pause_evt = threading.Event()
     stop_evt = threading.Event()
-    cmd_q: "queue.Queue[str]" = queue.Queue()
+    cmd_q: queue.Queue[str] = queue.Queue()
 
     live = LiveMap(on_key=lambda ch: _handle_key(ch, pause_evt, stop_evt, cmd_q))
 

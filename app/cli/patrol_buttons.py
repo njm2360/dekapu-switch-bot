@@ -7,10 +7,10 @@ from pathlib import Path
 from app.cli._logging import setup_logging
 from app.control.actuator import MouseLookActuator
 from app.control.controller import PatrolGains
+from app.control.pilot import Pilot
 from app.control.telemetry import ControlLog
 from app.mapping.mapper import RoomMapper
 from app.spatial.navigation import NavGrid, plan_path
-from app.control.pilot import Pilot
 
 # (name, xz, y, face_yaw_deg) face_yaw_deg=ボタンの向き(壁の外向き法線, +Z基準)
 Target = tuple[str, tuple[float, float], float, float]
