@@ -1,0 +1,19 @@
+# Normalize all text files to LF line endings on checkin/checkout,
+# regardless of the OS or editor used to create/edit them.
+* text=auto eol=lf
+
+# Explicit text types
+*.py     text eol=lf
+*.md     text eol=lf
+*.toml   text eol=lf
+*.json   text eol=lf
+*.csv    text eol=lf
+*.shader text eol=lf
+*.lock   text eol=lf
+*.gitignore text eol=lf
+*.gitattributes text eol=lf
+
+# Binary types — do not touch line endings
+*.png  binary
+*.npz  binary
+*.pyc  binary
