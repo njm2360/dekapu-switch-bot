@@ -24,7 +24,11 @@ sim-face = "app.cli.sim_face:main"
 sim-video = "app.cli.sim_video:main"
 
 [dependency-groups]
-dev = ["pytest>=9.1", "black>=26.5"]
+dev = [
+    "pytest>=9.1",
+    "black>=26.5",
+    "ruff>=0.15.22",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -38,3 +42,10 @@ testpaths = ["tests"]
 
 [tool.black]
 target-version = ["py314"]
+
+[tool.ruff]
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
