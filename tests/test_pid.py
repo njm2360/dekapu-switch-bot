@@ -74,7 +74,7 @@ def test_pid_reset_derivative_keeps_integral():
     pid.update(1.0, 0.1)
     i_before = pid.last_i
     pid.reset_derivative()  # 積分は保持、微分履歴のみクリア
-    out = pid.update(1.0, 0.1)
+    pid.update(1.0, 0.1)
     assert pid.last_d == 0.0  # prev=None → d=0(微分キックなし)
     assert pid.last_i >= i_before  # 積分は保持されて増えている
 

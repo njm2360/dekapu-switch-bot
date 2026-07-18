@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from itertools import pairwise
+
 import numpy as np
 import pytest
 
@@ -19,7 +21,7 @@ def rectangle_path(width=4.0, depth=6.0, step=0.1, x0=1.0, z0=-2.0):
         (x0, z0),
     ]
     pts = []
-    for (ax, az), (bx, bz) in zip(corners, corners[1:]):
+    for (ax, az), (bx, bz) in pairwise(corners):
         seg = np.hypot(bx - ax, bz - az)
         n = max(2, int(seg / step))
         for i in range(n):
@@ -307,9 +309,9 @@ def test_rewind_does_not_cross_into_previous_segment():
     m.break_segment()
     m.add(0.0, 5.0 - 5.0, 5.0)  # 新セグメントに1点だけ(z=5)
     m.add(0.1, 0.0, 5.0)
-    before_prev = [p for p, s in zip(m.points.tolist(), m._seg) if s == 0]
+    before_prev = [p for p, s in zip(m.points.tolist(), m._seg, strict=True) if s == 0]
     m.rewind(10.0)  # 大きく巻き戻しても現在seg内だけ
-    prev_still = [p for p, s in zip(m.points.tolist(), m._seg) if s == 0]
+    prev_still = [p for p, s in zip(m.points.tolist(), m._seg, strict=True) if s == 0]
     assert prev_still == before_prev  # 前セグメントは無傷
     assert not m._cur_has_points()  # 現在segは空になった
 

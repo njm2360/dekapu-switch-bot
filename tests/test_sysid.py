@@ -349,7 +349,7 @@ def test_median3_does_not_staircase_noise():
     out = _median3(noisy)
     # 各点が近傍の実測値のまま残る(平坦なプールへ均されない)こと
     assert len(set(out)) >= 40
-    assert max(abs(a - b) for a, b in zip(out, true)) < 4.0
+    assert max(abs(a - b) for a, b in zip(out, true, strict=True)) < 4.0
 
 
 def _spiked_yaw() -> AxisModel:

@@ -8,6 +8,7 @@ import logging
 import math
 from collections import deque
 from dataclasses import dataclass
+from itertools import pairwise
 
 import numpy as np
 from scipy.ndimage import (
@@ -377,7 +378,7 @@ def plan_path(
     waypoints = [grid.cell_to_world(r, c) for (r, c) in cells]
 
     length = 0.0
-    for a, b in zip(waypoints, waypoints[1:]):
+    for a, b in pairwise(waypoints):
         length += math.hypot(b[0] - a[0], b[1] - a[1])
     return Path(
         waypoints=waypoints,

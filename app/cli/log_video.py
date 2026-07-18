@@ -336,7 +336,7 @@ class MapPane:
                 bg[solid] = WALL_2D
             self._legend(bg)
         # 経路全体(予定線)を薄く
-        for px, py in zip(*self.to_px(data["x"], data["z"])):
+        for px, py in zip(*self.to_px(data["x"], data["z"]), strict=True):
             bg[max(py, 0) : py + 1, max(px, 0) : px + 1] = (90, 90, 100)
         self.bg = bg
         self.trail = np.zeros((h, w), bool)

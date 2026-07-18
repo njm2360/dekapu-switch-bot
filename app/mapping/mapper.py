@@ -241,7 +241,7 @@ class RoomMapper:
     def _rings_by_kind(self) -> tuple[list[np.ndarray], list[np.ndarray]]:
         """(外周リング列, 穴リング列)。3点以上あるセグメントのみをリングとして採用。"""
         outer, inner = [], []
-        for pts, kind in zip(self.segment_points(), self.segment_kinds()):
+        for pts, kind in zip(self.segment_points(), self.segment_kinds(), strict=True):
             if len(pts) < 3:
                 continue
             (outer if kind == "outer" else inner).append(pts)

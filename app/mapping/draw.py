@@ -59,7 +59,7 @@ def draw_map(
 
     # 歩行軌跡(=壁の輪郭)。セグメント分割をまたいでは繋がない。外周/内壁で色分け。
     seen = {"outer": False, "inner": False}
-    for seg, kind in zip(mapper.segment_points(), mapper.segment_kinds()):
+    for seg, kind in zip(mapper.segment_points(), mapper.segment_kinds(), strict=True):
         color = OUTER_COLOR if kind == "outer" else INNER_COLOR
         ax.plot(
             seg[:, 0],

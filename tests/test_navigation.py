@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
+from itertools import pairwise
 
 import numpy as np
 import pytest
@@ -16,7 +17,7 @@ def _trace(corners, step=0.05):
     """角のリストを順に結ぶ密な軌跡点(閉ループにするため末尾に先頭を足す)。"""
     pts = []
     loop = list(corners) + [corners[0]]
-    for (ax, az), (bx, bz) in zip(loop, loop[1:]):
+    for (ax, az), (bx, bz) in pairwise(loop):
         seg = math.hypot(bx - ax, bz - az)
         n = max(2, int(seg / step))
         for i in range(n):
@@ -177,7 +178,7 @@ def _sample_segments(waypoints, step=0.02):
     経由点だけの採点では線分が角を掠めるのを見逃すため、必ず線分全体を評価する。
     """
     out = []
-    for a, b in zip(waypoints, waypoints[1:]):
+    for a, b in pairwise(waypoints):
         d = math.hypot(b[0] - a[0], b[1] - a[1])
         n = max(1, int(d / step))
         for i in range(n):
@@ -391,7 +392,7 @@ def north_gap_mapper(gap: float):
         (6, 6),  # 南 → 東 → 北(右)
         (3 + gap / 2, 6),  # 隙間の右縁まで
     ]
-    for a, b in zip(corners, corners[1:]):
+    for a, b in pairwise(corners):
         _line(m, a, b)
     return m
 

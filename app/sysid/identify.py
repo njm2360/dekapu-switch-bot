@@ -16,6 +16,7 @@ import math
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from itertools import pairwise
 from pathlib import Path
 from statistics import fmean, median
 
@@ -476,7 +477,7 @@ def _denoise_points(
         )
     max_rate = max((abs(y) for y in ys), default=0.0)
     if max_rate > 0.0:
-        worst = max(abs(a - b) for a, b in zip(ys, smoothed))
+        worst = max(abs(a - b) for a, b in zip(ys, smoothed, strict=True))
         if worst > 0.1 * max_rate:
             logger.warning(
                 "axis %s: median filter adjusted static curve by %.0f%% of "
@@ -484,7 +485,7 @@ def _denoise_points(
                 axis,
                 100.0 * worst / max_rate,
             )
-    return [(c, y) for (c, _), y in zip(points, smoothed)]
+    return [(c, y) for (c, _), y in zip(points, smoothed, strict=True)]
 
 
 def _responses(samples: list[ProbeSample], axis: str) -> np.ndarray:
@@ -496,7 +497,7 @@ def _responses(samples: list[ProbeSample], axis: str) -> np.ndarray:
     """
     if axis == "yaw":
         yaws = [s.yaw for s in samples]
-        return np.cumsum([0.0] + [wrap180(b - a) for a, b in zip(yaws, yaws[1:])])
+        return np.cumsum([0.0] + [wrap180(b - a) for a, b in pairwise(yaws)])
     if axis == "pitch":
         p0 = samples[0].pitch
         return np.array([s.pitch - p0 for s in samples])
@@ -616,7 +617,7 @@ def identify_axis(
                 seq = [by_seg[i - 1][-1]] + by_seg[i]
                 resp = np.abs(_responses(seq, run.axis))
                 prev_s, prev_r = seq[0], float(resp[0])  # 遷移直前(応答≈0)
-                for s, r in zip(seq[1:], resp[1:]):
+                for s, r in zip(seq[1:], resp[1:], strict=True):
                     r = float(r)
                     if r > thr:
                         # しきい値を跨ぐ時刻を前後サンプルで線形補間(1フレーム量子化遅れを除く)
@@ -636,7 +637,7 @@ def identify_axis(
 def extract_dts(run: ProbeRun, cap: float = 0.2) -> list[float]:
     """フレーム間隔 dt の列(記録全体。異常な間隔は cap で除外)。"""
     ts = [s.t for s in run.samples]
-    return [b - a for a, b in zip(ts, ts[1:]) if 0.0 < b - a <= cap]
+    return [b - a for a, b in pairwise(ts) if 0.0 < b - a <= cap]
 
 
 # ---------------------------------------------------------------------------

@@ -92,7 +92,7 @@ def test_from_pose_uses_forward_ray():
 
 def test_zero_direction_rejected():
     with pytest.raises(ValueError):
-        Sighting(origin=(0, 0, 0), direction=(0, 0, 0)).direction_arr
+        _ = Sighting(origin=(0, 0, 0), direction=(0, 0, 0)).direction_arr
 
 
 def test_result_to_dict():

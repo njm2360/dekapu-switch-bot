@@ -155,7 +155,10 @@ def _run_live(axes: list[str], out_dir: Path, args) -> list[ProbeRun]:
         print(f"starting in {args.start_delay:.0f}s...")
         time.sleep(args.start_delay)
         for axis in axes:
-            send = lambda v, name=AXIS_INPUT[axis]: osc.axis(name, v)
+
+            def send(v: float, name: str = AXIS_INPUT[axis]) -> None:
+                osc.axis(name, v)
+
             t_start = time.monotonic()
             print(f"probe {axis} (/input/{AXIS_INPUT[axis]})")
             try:
