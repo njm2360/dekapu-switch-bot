@@ -22,12 +22,12 @@ from app.control.controller import (
 from app.control.maneuvers import (
     aim_at,
     follow_path,
-    follow_path_hold_view,
+    follow_path_translate,
     strafe_align,
     turn_to,
 )
 from app.control.pilot import Pilot
-from app.control.telemetry import AxisMetrics
+from app.control.recording import AxisMetrics
 from app.core.pose import Pose
 from app.mapping.mapper import Bounds
 from app.spatial.navigation import NavGrid
@@ -104,7 +104,7 @@ def test_follow_path_arrives_when_already_at_goal():
 
 
 def test_follow_path_scripted_walk_records_and_commands():
-    g = _gains(arrive=0.35)
+    g = _gains(arrive_radius=0.35)
     # +Z へ進んでいく位置系列(最後は最終WP上=到達)
     poses = [
         _pose(i + 1, (0.0, 1.6, z)) for i, z in enumerate([0.0, 0.5, 1.0, 1.5, 2.0])
@@ -139,7 +139,7 @@ def test_follow_path_empty_waypoints_is_noop_arrived():
 
 # ---- aim_at(視点合わせだけ) --------------------------------------------
 def test_aim_at_converges_when_aligned():
-    g = _gains(settle=3, face_tol=1.0)
+    g = _gains(settle_frames=3, face_tol=1.0)
     # 既に真正面(+Z)を向いてターゲットも +Z・同じ高さ → yaw/pitch 誤差 0
     aligned = [_pose(i + 1, (0.0, 1.0, 0.0)) for i in range(5)]
     reader = FakeReader(aligned)
@@ -152,7 +152,7 @@ def test_aim_at_converges_when_aligned():
 
 # ---- turn_to(指定方向を向く) -------------------------------------------
 def test_turn_to_yaw_only_converges():
-    g = _gains(settle=3, face_tol=1.0)
+    g = _gains(settle_frames=3, face_tol=1.0)
     # 既に yaw=90° を向いている → 目標 90° に対し誤差0(pitch は無視)
     reader = FakeReader([_pose(i + 1, (0.0, 1.0, 0.0), yaw_deg=90.0) for i in range(5)])
     look = RecActuator()
@@ -162,7 +162,7 @@ def test_turn_to_yaw_only_converges():
 
 
 def test_turn_to_yaw_and_pitch_converges():
-    g = _gains(settle=3, face_tol=1.0)
+    g = _gains(settle_frames=3, face_tol=1.0)
     # yaw=45°, pitch=-20° を向いている → 同じ目標角なら両方誤差0で収束
     reader = FakeReader(
         [_pose(i + 1, (0.0, 1.0, 0.0), yaw_deg=45.0, pitch_deg=-20.0) for i in range(5)]
@@ -174,7 +174,7 @@ def test_turn_to_yaw_and_pitch_converges():
 
 
 def test_turn_to_pitch_none_leaves_pitch_metrics_none():
-    g = _gains(settle=3, face_tol=1.0)
+    g = _gains(settle_frames=3, face_tol=1.0)
     reader = FakeReader([_pose(i + 1, (0.0, 1.0, 0.0), yaw_deg=90.0) for i in range(5)])
     # recorder を渡した時だけ指標が付く
     res = turn_to(
@@ -187,7 +187,7 @@ def test_turn_to_pitch_none_leaves_pitch_metrics_none():
 # ---- strafe_align(横移動による最終照準) --------------------------------
 def test_strafe_align_converges_when_on_line():
     # 視線の延長上にターゲット(横ずれ0・pitch 0)→ 即収束
-    g = _gains(settle=3, align_tol=0.02)
+    g = _gains(settle_frames=3, align_tol=0.02)
     poses = [_pose(i + 1, (0.0, 1.0, 0.0)) for i in range(5)]
     look, move = RecActuator(), RecActuator()
     res = strafe_align(
@@ -205,7 +205,7 @@ def test_strafe_align_converges_when_on_line():
 
 def test_strafe_align_strafes_toward_error_side():
     # 目標が右(+X)にずれている → 横移動指令は正(右)
-    g = _gains(settle=3, align_tol=0.02)
+    g = _gains(settle_frames=3, align_tol=0.02)
     poses = [_pose(i + 1, (0.0, 1.0, 0.0)) for i in range(10)]
     look, move = RecActuator(), RecActuator()
     strafe_align(
@@ -224,7 +224,9 @@ def test_strafe_align_strafes_toward_error_side():
 
 def test_strafe_align_stuck_abort():
     # 位置が変わらない(壁に押し付け)のに誤差が残る → stuck で打ち切り
-    g = _gains(settle=3, align_tol=0.02, align_stuck_time=0.15, align_timeout=5.0)
+    g = _gains(
+        settle_frames=3, align_tol=0.02, align_stuck_time=0.15, align_timeout=5.0
+    )
 
     class FrozenReader:
         """毎回新しい time_ms を返すが位置は動かない(壁押し付けの再現)。"""
@@ -251,16 +253,16 @@ def test_strafe_align_stuck_abort():
     assert move.stops == 1
 
 
-# ---- follow_path_hold_view(視点を変えずに並進) -------------------------
+# ---- follow_path_translate(視点を変えずに並進) -------------------------
 def test_hold_view_strafes_to_side_without_turning():
     # 体は +Z を向いたまま(yaw=0)、右(+X)の目標へ。横移動指令が出て視点は一切回さない。
-    g = _gains(arrive=0.35)
+    g = _gains(arrive_radius=0.35)
     # +X へ進んでいく位置系列(最後は最終WP上=到達)
     poses = [
         _pose(i + 1, (x, 1.6, 0.0)) for i, x in enumerate([0.0, 0.5, 1.0, 1.5, 2.0])
     ]
     look, move = RecActuator(), RecActuator()
-    res = follow_path_hold_view(
+    res = follow_path_translate(
         FakeReader(poses),
         look,
         move,
@@ -278,12 +280,12 @@ def test_hold_view_strafes_to_side_without_turning():
 
 def test_hold_view_moves_forward_when_target_ahead():
     # 目標が正面(+Z)→ 前進成分が出て横は出ない。視点は回さない。
-    g = _gains(arrive=0.35)
+    g = _gains(arrive_radius=0.35)
     poses = [
         _pose(i + 1, (0.0, 1.6, z)) for i, z in enumerate([0.0, 0.5, 1.0, 1.5, 2.0])
     ]
     look, move = RecActuator(), RecActuator()
-    res = follow_path_hold_view(
+    res = follow_path_translate(
         FakeReader(poses),
         look,
         move,
@@ -297,8 +299,8 @@ def test_hold_view_moves_forward_when_target_ahead():
     assert all(t == 0.0 for t, _p in look.looks)  # 視点(yaw)は回さない
 
 
-def test_pilot_move_to_reaches_holding_view():
-    # Pilot.move_to は plan_path で壁回避しつつ、視点を変えずに到達する(start≈goal で即到達)
+def test_pilot_translate_to_reaches_holding_view():
+    # Pilot.translate_to は plan_path で壁回避しつつ、視点を変えずに到達する(start≈goal で即到達)
     look, move = RecActuator(), RecActuator()
     pilot = Pilot(
         _grid(np.ones((10, 10), bool)),
@@ -306,15 +308,15 @@ def test_pilot_move_to_reaches_holding_view():
         look,
         move,
     )
-    res = pilot.move_to((0.5, 0.5))
-    assert res.reached and res.arrived
+    res = pilot.translate_to((0.5, 0.5))
+    assert res.path_found and res.arrived
     assert all(t == 0.0 and p == 0.0 for t, p in look.looks)  # 視点固定
 
 
 # ---- チューニング指標(AxisMetrics) -----------------------------------
 def test_metrics_only_when_recorder_attached():
     # recorder なし(=非ログ・非チューニング)なら指標計算は入らず None
-    g = _gains(settle=3, face_tol=1.0)
+    g = _gains(settle_frames=3, face_tol=1.0)
     reader = FakeReader([_pose(i + 1, (0.0, 1.0, 0.0), yaw_deg=90.0) for i in range(5)])
     res = turn_to(reader, RecActuator(), 90.0, g, face_controllers(g))  # recorder 省略
     assert res.converged  # 制御・収束判定は従来どおり動く
@@ -322,7 +324,7 @@ def test_metrics_only_when_recorder_attached():
 
 
 def test_metrics_populated_and_scorable():
-    g = _gains(settle=3, face_tol=1.0)
+    g = _gains(settle_frames=3, face_tol=1.0)
     # yaw を +30°→0° へ寄せる(誤差が減っていく)ポーズ列。整定して収束する
     yaws = [30.0, 18.0, 8.0, 2.0, 0.3, 0.2, 0.1]
     reader = FakeReader(
@@ -342,7 +344,7 @@ def test_metrics_populated_and_scorable():
 
 
 def test_follow_path_exposes_yaw_metrics():
-    g = _gains(arrive=0.35)
+    g = _gains(arrive_radius=0.35)
     poses = [
         _pose(i + 1, (0.0, 1.6, z)) for i, z in enumerate([0.0, 0.5, 1.0, 1.5, 2.0])
     ]
@@ -360,7 +362,7 @@ def test_follow_path_exposes_yaw_metrics():
 
 
 def test_turn_to_pitch_error_uses_target_angle():
-    g = _gains(settle=1, face_tol=1.0)
+    g = _gains(settle_frames=1, face_tol=1.0)
     # yaw 合致・pitch は現在0°で目標+30° → pitch 誤差 ≈ +30(上を向く必要)
     reader = FakeReader([_pose(1, (0.0, 1.0, 0.0), yaw_deg=0.0, pitch_deg=0.0)])
     look = RecActuator()
@@ -379,7 +381,7 @@ def test_pilot_goto_no_pose():
         _grid(np.ones((10, 10), bool)), FakeReader([]), RecActuator(), RecActuator()
     )
     res = pilot.goto((0.5, 0.5))
-    assert not res.reached and res.reason == "no_pose"
+    assert not res.path_found and res.reason == "no_pose"
 
 
 def test_pilot_goto_unreachable():
@@ -391,7 +393,7 @@ def test_pilot_goto_unreachable():
         RecActuator(),
     )
     res = pilot.goto((0.9, 0.9))
-    assert not res.reached and res.reason == "unreachable"
+    assert not res.path_found and res.reason == "unreachable"
 
 
 def test_pilot_standoff_goal_is_in_front_of_button():
@@ -423,4 +425,4 @@ def test_pilot_is_usable_without_hardware_imports():
     )
     assert pilot._owns_io is False
     res = pilot.goto((0.5, 0.5))  # start≈goal なのですぐ到達
-    assert res.reached
+    assert res.path_found

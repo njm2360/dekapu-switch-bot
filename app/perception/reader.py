@@ -10,7 +10,7 @@ import numpy as np
 
 from ..core.pose import Pose
 from .capture import FrameSource
-from .decode import DecodeResult, DecodeStatus, decode_pose
+from .decode import DecodeResult, DecodeStatus, decode_frame
 
 logger = logging.getLogger(__name__)
 
@@ -34,12 +34,12 @@ class ReaderStats:
     frames_grabbed: int = 0  # キャプチャ回数(重複含む総取得数)
     decode_ok: int = 0  # 検証OK(重複含む)
     decode_fail: int = 0  # MAGIC/チェックサム不一致
-    new_frames: int = 0  # 新規(time_ms 更新)ポーズ数
+    new_poses: int = 0  # 新規(time_ms 更新)ポーズ数
     duplicate_skipped: int = 0  # 同一 time_ms の二重読み
     consecutive_fail: int = 0  # 連続デコード失敗数(成功でリセット)
     last_status: DecodeStatus | None = None
     capture_fps: float = 0.0  # キャプチャの処理速度
-    frame_fps: float = 0.0  # 新規ポーズの実効fps
+    pose_fps: float = 0.0  # 新規ポーズの実効fps
 
     @property
     def success_rate(self) -> float:
@@ -73,7 +73,7 @@ class PoseReader:
         self._queue: queue.Queue[Pose] = queue.Queue(maxsize=_QUEUE_MAX)
 
         self._capture_times: deque[float] = deque(maxlen=_STATS_WINDOW)
-        self._frame_times: deque[float] = deque(maxlen=_STATS_WINDOW)
+        self._pose_times: deque[float] = deque(maxlen=_STATS_WINDOW)
 
     # ---- ライフサイクル -------------------------------------------------
     def start(self) -> PoseReader:
@@ -126,7 +126,7 @@ class PoseReader:
     def process_frame(self, frame: np.ndarray) -> DecodeResult:
         """1フレームをデコードして統計・状態を更新する(単体テスト可能)。"""
         now = time.monotonic()
-        result = decode_pose(frame)
+        result = decode_frame(frame)
 
         with self._lock:
             self.stats.frames_grabbed += 1
@@ -145,8 +145,8 @@ class PoseReader:
                 else:
                     self._last_time_ms = pose.time_ms
                     self._latest = pose
-                    self.stats.new_frames += 1
-                    self._frame_times.append(now)
+                    self.stats.new_poses += 1
+                    self._pose_times.append(now)
                     self._enqueue(pose)
             else:
                 self.stats.decode_fail += 1
@@ -205,4 +205,4 @@ class PoseReader:
 
     def _update_fps(self) -> None:
         self.stats.capture_fps = _fps_from(self._capture_times)
-        self.stats.frame_fps = _fps_from(self._frame_times)
+        self.stats.pose_fps = _fps_from(self._pose_times)

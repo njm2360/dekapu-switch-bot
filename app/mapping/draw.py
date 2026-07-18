@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 from matplotlib.patches import PathPatch
 from matplotlib.path import Path as MplPath
@@ -77,3 +79,27 @@ def draw_map(
     ax.set_ylabel("Z [m]")
     ax.set_title(title or f"Room map  {w:.2f} x {d:.2f} m  ({len(mapper)} pts)")
     ax.legend(loc="upper right", fontsize=8)
+
+
+def save_map_png(
+    mapper: RoomMapper,
+    out_path: str | Path,
+    cell: float = 0.1,
+    show_occupancy: bool = True,
+    title: str | None = None,
+) -> Path:
+    """地図を PNG に保存する(バックエンド非依存。GUI を開かない)。"""
+    from matplotlib.figure import Figure
+
+    if len(mapper) == 0:
+        raise ValueError("no points to render")
+
+    out_path = Path(out_path).with_suffix(".png")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    fig = Figure(figsize=(8, 8))
+    ax = fig.add_subplot()
+    draw_map(ax, mapper, cell=cell, show_occupancy=show_occupancy, title=title)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=120)
+    return out_path

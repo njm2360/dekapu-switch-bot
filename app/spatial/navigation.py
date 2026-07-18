@@ -306,7 +306,7 @@ class Path:
 
     waypoints: list[tuple[float, float]]  # XZ [m] の経由点列(start→goal付近)
     length: float  # 総距離 [m]
-    reached_goal_cell: tuple[float, float]  # 実際に到達するゴール寄りセルのXZ
+    snapped_goal_xz: tuple[float, float]  # 実際に到達するゴール寄りセルのXZ
     goal_blocked: bool  # 目標が壁または到達不能な孤立領域で、最寄りの床に迂回したか
 
 
@@ -382,6 +382,6 @@ def plan_path(
     return Path(
         waypoints=waypoints,
         length=length,
-        reached_goal_cell=grid.cell_to_world(*gc),
+        snapped_goal_xz=grid.cell_to_world(*gc),
         goal_blocked=goal_blocked,
     )

@@ -50,10 +50,10 @@ def test_break_segment_prevents_connecting_line():
 
     occ = m.occupancy_grid(cell=0.1, pad=0.5)
     # 両区間は占有されている
-    assert occ.grid[occ.world_to_index(0.5, 0.0)]
-    assert occ.grid[occ.world_to_index(0.5, 5.0)]
+    assert occ.grid[occ.world_to_cell(0.5, 0.0)]
+    assert occ.grid[occ.world_to_cell(0.5, 5.0)]
     # 間(z=2.5 付近)は繋がっていない=偽の壁が無い
-    assert not occ.grid[occ.world_to_index(0.5, 2.5)]
+    assert not occ.grid[occ.world_to_cell(0.5, 2.5)]
 
 
 def test_without_break_line_is_connected():
@@ -63,7 +63,7 @@ def test_without_break_line_is_connected():
     _line(m, (0.0, 5.0), (1.0, 5.0))  # break なし
     assert m.num_segments == 1
     occ = m.occupancy_grid(cell=0.1, pad=0.5)
-    assert occ.grid[occ.world_to_index(0.5, 2.5)]  # 繋ぎ線が通る
+    assert occ.grid[occ.world_to_cell(0.5, 2.5)]  # 繋ぎ線が通る
 
 
 def test_break_segment_excludes_gap_from_path_length():
@@ -104,7 +104,7 @@ def test_segments_survive_save_load(tmp_path):
     assert loaded.path_length() == pytest.approx(m.path_length())
     # 分割が保たれ、gap は繋がらない
     occ = loaded.occupancy_grid(cell=0.1, pad=0.5)
-    assert not occ.grid[occ.world_to_index(0.5, 2.5)]
+    assert not occ.grid[occ.world_to_cell(0.5, 2.5)]
 
 
 def test_dimensions_recovered_from_rectangle():
@@ -314,13 +314,13 @@ def test_rewind_does_not_cross_into_previous_segment():
     assert not m._cur_has_points()  # 現在segは空になった
 
 
-def test_redo_segment_discards_current_segment_keeps_mode():
+def test_discard_segment_discards_current_segment_keeps_mode():
     m = RoomMapper(min_move=0.0)
     _line(m, (0.0, 0.0), (1.0, 0.0))
     m.break_segment()
     m.set_mode("inner")
     _line(m, (0.0, 5.0), (1.0, 5.0))  # やり直したい inner 区間
-    dropped = m.redo_segment()
+    dropped = m.discard_segment()
     assert dropped >= 1
     assert m.mode == "inner"  # モードは維持
     m.add(0.0, 1.6, 5.0)  # 取り直し
@@ -330,12 +330,12 @@ def test_redo_segment_discards_current_segment_keeps_mode():
 
 
 # ---- レンダラ(matplotlib) ----------------------------------------------
-def test_render_map_png(tmp_path):
+def test_save_map_png(tmp_path):
     pytest.importorskip("matplotlib")
-    from app.mapping.render import render_map
+    from app.mapping.draw import save_map_png
 
     m = RoomMapper(min_move=0.0)
     for x, z in rectangle_path(4.0, 6.0):
         m.add(x, 1.6, z)
-    out = render_map(m, tmp_path / "map", cell=0.1)
+    out = save_map_png(m, tmp_path / "map", cell=0.1)
     assert out.exists() and out.stat().st_size > 0

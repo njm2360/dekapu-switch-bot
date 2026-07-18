@@ -21,7 +21,7 @@ patrol-buttons = "app.cli.patrol_buttons:main"
 probe-axes = "app.cli.probe_axes:main"
 calibrate-world = "app.cli.calibrate_world:main"
 sim-face = "app.cli.sim_face:main"
-sim-video = "app.cli.sim_video:main"
+log-video = "app.cli.log_video:main"
 
 [dependency-groups]
 dev = [

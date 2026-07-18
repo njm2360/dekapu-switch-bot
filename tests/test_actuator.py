@@ -74,7 +74,7 @@ def test_nav_and_face_controllers_from_gains():
     assert nav.forward.pid.out_max == pytest.approx(0.6)
     # 正対 yaw は tol=face_tol・不感帯補償つき
     assert face.yaw.tol == pytest.approx(1.5)
-    assert face.yaw.pid.out_deadzone == pytest.approx(0.55)
+    assert face.yaw.pid.out_floor == pytest.approx(0.55)
     # 移動 yaw も不感帯補償つき(face と同機構)。tol は入れない(LC誘発のため)
-    assert nav.yaw.pid.out_deadzone == pytest.approx(g.nav_turn_deadzone)
+    assert nav.yaw.pid.out_floor == pytest.approx(g.nav_turn_deadzone)
     assert nav.yaw.tol == 0.0

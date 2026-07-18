@@ -1,7 +1,7 @@
 """誘導を構成する制御ループ部品(1フェーズ=1関数)。
 
 実機 I/O には依存せず、PoseSource / LookActuator / MoveActuator の抽象だけで
-動く(ヘッドレスでテスト可能)。follow_path / follow_path_hold_view は体の移動追従
+動く(ヘッドレスでテスト可能)。follow_path / follow_path_translate は体の移動追従
 (後者は視点を回さない)、aim_at / turn_to は視点合わせ、strafe_align は横移動での
 最終照準。経路計画やフェーズの連結は pilot.Pilot が担う。
 """
@@ -24,7 +24,7 @@ from .controller import (
     TranslateControllers,
 )
 from .guidance import forward_factor, heading_error, pitch_error, wrap180
-from .telemetry import AxisAccumulator, AxisMetrics, NullRecorder, Recorder
+from .recording import AxisAccumulator, AxisMetrics, NullRecorder, Recorder
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +121,7 @@ def _next_frame(
 
 @dataclass
 class NavResult:
-    reached: bool  # 経路が見つかった(到達可能)
+    path_found: bool  # 経路が見つかった(到達可能)
     arrived: bool  # 最終ウェイポイント付近まで到達した
     reason: str  # "arrived" | "unreachable" | "no_pose" | "hud_lost" | "timeout"
     path: Path | None  # follow() 直接指定時は None
@@ -134,13 +134,14 @@ class NavResult:
 
 @dataclass
 class AimResult:
-    converged: bool  # yaw/pitch とも許容内を settle 回連続で達成した
+    converged: bool  # yaw/pitch とも許容内を settle_frames 回連続で達成した
     yaw_err: float  # 最終 yaw 誤差[deg]
     pitch_err: float  # 最終 pitch 誤差[deg]
     elapsed: float
     frames: int
     yaw: AxisMetrics | None = None
     pitch: AxisMetrics | None = None  # pitch 未制御時は None
+    lat: AxisMetrics | None = None  # 横ずれ[m]の応答指標(strafe_align のみ)
     reason: str = ""  # "converged" | "timeout" | "hud_lost" | "stuck"(align のみ)
 
 
@@ -185,7 +186,7 @@ def follow_path(
 
             seg, s_proj = _project_arclen(cur, wps, cum, seg)
             end_dist = _dist(cur, wps[-1])
-            if total - s_proj < gains.arrive and end_dist < gains.arrive:
+            if total - s_proj < gains.arrive_radius and end_dist < gains.arrive_radius:
                 break
             carrot_s = s_proj + gains.nav_lookahead
             final = carrot_s >= total  # carrot が末端にクランプ=減速フェーズ
@@ -241,7 +242,7 @@ def follow_path(
         elapsed,
     )
     return NavResult(
-        reached=True,
+        path_found=True,
         arrived=(reason == "arrived"),
         reason=reason,
         path=None,
@@ -251,7 +252,7 @@ def follow_path(
     )
 
 
-def follow_path_hold_view(
+def follow_path_translate(
     reader: PoseSource,
     look: LookActuator,
     move: MoveActuator,
@@ -281,14 +282,14 @@ def follow_path_hold_view(
             pose, dt, now = _next_frame(reader, last_t, last_time, clock=clock)
             if pose is None:
                 reason = "hud_lost"
-                logger.warning("[%s] HUD lost, abort move", name)
+                logger.warning("[%s] HUD lost, abort translate", name)
                 break
             last_t, last_time = pose.time_ms, now
             frames += 1
             cur = (pose.position[0], pose.position[2])
 
             prev_idx = idx
-            while idx < len(wps) - 1 and _dist(cur, wps[idx]) < gains.arrive:
+            while idx < len(wps) - 1 and _dist(cur, wps[idx]) < gains.arrive_radius:
                 idx += 1
             if idx != prev_idx:
                 # 目標切替で誤差が跳ねたときの微分キックを防ぐ
@@ -297,7 +298,7 @@ def follow_path_hold_view(
             target = wps[idx]
             final = idx == len(wps) - 1
             dist = _dist(cur, target)
-            if final and dist < gains.arrive:
+            if final and dist < gains.arrive_radius:
                 break
 
             # 世界系の目標誤差を体の前/右方向へ射影
@@ -314,7 +315,7 @@ def follow_path_hold_view(
             if track:
                 rec.row(
                     t=now - t0,
-                    phase="move",
+                    phase="translate",
                     target=name,
                     wp=idx,
                     dt=dt,
@@ -333,7 +334,7 @@ def follow_path_hold_view(
                 )
             if now - t0 > gains.nav_timeout:
                 reason = "timeout"
-                logger.warning("[%s] move timeout", name)
+                logger.warning("[%s] translate timeout", name)
                 break
     finally:
         # 中断時も必ず停止
@@ -341,7 +342,7 @@ def follow_path_hold_view(
         look.stop()
     elapsed = clock.monotonic() - t0
     logger.debug(
-        "[%s] move end: %s wp=%d/%d frames=%d %.2fs",
+        "[%s] translate end: %s wp=%d/%d frames=%d %.2fs",
         name,
         reason,
         idx,
@@ -350,7 +351,7 @@ def follow_path_hold_view(
         elapsed,
     )
     return NavResult(
-        reached=True,
+        path_found=True,
         arrived=(reason == "arrived"),
         reason=reason,
         path=None,
@@ -404,7 +405,7 @@ def _face_loop(
             pitch_ok = not control_pitch or abs(pitch_err) < gains.face_tol
             if abs(yaw_err) < gains.face_tol and pitch_ok:
                 settle += 1
-                if settle >= gains.settle:
+                if settle >= gains.settle_frames:
                     converged = True
                     reason = "converged"
                     break
@@ -486,7 +487,7 @@ def strafe_align(
     横ずれ e = dist·sin(yaw_err)[m] に換算し、連続的に効く移動軸で吸収する
     (根拠は gain-tuning.md)。pitch は視点で合わせる。
 
-    収束: |e| < align_tol かつ |pitch_err| < face_tol を settle 回連続。
+    収束: |e| < align_tol かつ |pitch_err| < face_tol を settle_frames 回連続。
     壁に塞がれ align_stuck_time 秒間 align_stuck_eps[m] 以上動けなければ
     reason="stuck" で打ち切る。
     """
@@ -524,7 +525,7 @@ def strafe_align(
 
             if abs(lat_err) < gains.align_tol and abs(pitch_err) < gains.face_tol:
                 settle += 1
-                if settle >= gains.settle:
+                if settle >= gains.settle_frames:
                     converged = True
                     reason = "converged"
                     break
@@ -598,7 +599,7 @@ def strafe_align(
         pitch_err=pitch_err,
         elapsed=elapsed,
         frames=frames,
-        yaw=lat_acc.snapshot() if (track and frames) else None,  # 誤差=横ずれ[m]
+        lat=lat_acc.snapshot() if (track and frames) else None,
         pitch=pitch_acc.snapshot() if (track and frames) else None,
         reason=reason,
     )

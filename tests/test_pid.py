@@ -55,16 +55,16 @@ def test_pid_exposes_term_breakdown():
 
 
 def test_pid_deadzone_compensation():
-    # out_deadzone>0 なら微小な非ゼロ出力でも最低 out_deadzone まで底上げする(符号保持)
-    pid = PID(kp=0.01, out_deadzone=0.55)
-    out = pid.update(1.0, 0.1)  # 生出力 0.01 → out_deadzone まで底上げ
+    # out_floor>0 なら微小な非ゼロ出力でも最低 out_floor まで底上げする(符号保持)
+    pid = PID(kp=0.01, out_floor=0.55)
+    out = pid.update(1.0, 0.1)  # 生出力 0.01 → out_floor まで底上げ
     assert out == pytest.approx(0.55 + (1 - 0.55) * 0.01, abs=1e-6)
     neg = pid.update(-1.0, 0.1)
     assert neg < 0 and abs(neg) == pytest.approx(0.55 + (1 - 0.55) * 0.01, abs=1e-6)
     # ちょうど0(誤差0)は0のまま(底上げしない)
-    assert PID(kp=0.1, out_deadzone=0.55).update(0.0, 0.1) == 0.0
+    assert PID(kp=0.1, out_floor=0.55).update(0.0, 0.1) == 0.0
     # 生出力が飽和(1.0)なら 1.0 のまま
-    big = PID(kp=1.0, out_deadzone=0.55).update(5.0, 0.1)
+    big = PID(kp=1.0, out_floor=0.55).update(5.0, 0.1)
     assert big == pytest.approx(1.0)
 
 
@@ -112,7 +112,7 @@ def test_pid_antiwindup_keys_off_output_not_integral():
 
 def test_pid_deadzone_reclamped_to_tight_rails():
     """不感帯補償後の出力が out_min/out_max(±1 より狭い)を超えない。"""
-    pid = PID(kp=1.0, out_deadzone=0.55, out_min=-0.8, out_max=0.8)
+    pid = PID(kp=1.0, out_floor=0.55, out_min=-0.8, out_max=0.8)
     for e in (0.05, 0.5, 5.0, -0.05, -5.0):
         out = pid.update(e, 0.1)
         assert -0.8 - 1e-12 <= out <= 0.8 + 1e-12

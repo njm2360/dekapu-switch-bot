@@ -5,7 +5,7 @@ import pytest
 
 from app.control.controller import PatrolGains
 from app.sysid.identify import AxisModel, PlantModel
-from app.sysid.simplant import SimClock, SimulatedVRChat
+from app.sysid.sim_plant import SimClock, SimulatedVRChat
 from app.sysid.worldcal import (
     CAL_AXES,
     MOVE_DEADBAND_CMD,
@@ -256,7 +256,7 @@ def test_scale_gains_halves_kp_for_2x_world():
     assert out.gains.fwd_kp == pytest.approx(base.fwd_kp / 2.0)
     assert out.gains.strafe_kp == pytest.approx(base.strafe_kp / 2.0)
     assert out.gains.strafe_ki == pytest.approx(base.strafe_ki / 2.0)
-    assert out.gains.hmove_kp == pytest.approx(base.hmove_kp / 2.0)
+    assert out.gains.translate_kp == pytest.approx(base.translate_kp / 2.0)
     # 視点系はワールド不変
     assert out.gains.turn_kp == base.turn_kp
     assert out.gains.nav_turn_kp == base.nav_turn_kp
@@ -265,14 +265,14 @@ def test_scale_gains_halves_kp_for_2x_world():
 
 def test_scale_gains_scales_every_move_pid_term():
     """既定で 0 の項も含めて移動系の kp/ki/kd は全て 1/s 倍する。"""
-    base = replace(PatrolGains(), hmove_ki=0.4, hmove_kd=0.2, fwd_kd=0.05)
+    base = replace(PatrolGains(), translate_ki=0.4, translate_kd=0.2, fwd_kd=0.05)
     out = scale_gains(base, 2.0, 2.0)
     for name in (
         "fwd_kp",
         "fwd_kd",
-        "hmove_kp",
-        "hmove_ki",
-        "hmove_kd",
+        "translate_kp",
+        "translate_ki",
+        "translate_kd",
         "strafe_kp",
         "strafe_ki",
         "strafe_kd",
@@ -323,19 +323,19 @@ def test_scale_gains_cruise_cap_uses_faster_translation_axis():
     assert out.gains.speed == pytest.approx(
         MOVE_DEADBAND_CMD + (base.speed - MOVE_DEADBAND_CMD) / 1.5
     )
-    assert out.gains.hmove_kp == pytest.approx(base.hmove_kp / 1.5)
+    assert out.gains.translate_kp == pytest.approx(base.translate_kp / 1.5)
     assert out.gains.strafe_kp == pytest.approx(base.strafe_kp)  # 自軸倍率 1.0
 
 
 def test_scale_gains_applies_stall_floor_for_extreme_s():
     base = PatrolGains()
     out = scale_gains(base, 10.0, 10.0)
-    fwd_floor = MOVE_DEADBAND_CMD * 1.2 / base.arrive
-    hmove_floor = MOVE_DEADBAND_CMD * 1.2 * math.sqrt(2.0) / base.arrive
+    fwd_floor = MOVE_DEADBAND_CMD * 1.2 / base.arrive_radius
+    translate_floor = MOVE_DEADBAND_CMD * 1.2 * math.sqrt(2.0) / base.arrive_radius
     assert out.gains.fwd_kp == pytest.approx(fwd_floor)
-    assert out.gains.hmove_kp == pytest.approx(hmove_floor)
+    assert out.gains.translate_kp == pytest.approx(translate_floor)
     assert any("stall floor" in n for n in out.notes)
-    assert out.gains.fwd_kp * base.arrive > MOVE_DEADBAND_CMD
+    assert out.gains.fwd_kp * base.arrive_radius > MOVE_DEADBAND_CMD
 
 
 def test_scale_gains_no_floor_clamp_at_moderate_speed():
@@ -466,7 +466,7 @@ def test_apply_scales_gains_for_known_scale():
     assert out.s_strafe == pytest.approx(2.0)
     assert out.gains.strafe_kp == pytest.approx(base.strafe_kp / 2.0)
     assert out.gains.fwd_kp == pytest.approx(base.fwd_kp / 2.0)
-    assert out.gains.hmove_kp == pytest.approx(base.hmove_kp / 2.0)
+    assert out.gains.translate_kp == pytest.approx(base.translate_kp / 2.0)
     # 視点系はワールド不変
     assert out.gains.turn_kp == base.turn_kp
     assert out.gains.nav_turn_kp == base.nav_turn_kp
@@ -557,7 +557,7 @@ def test_pilot_applies_world_cal_object():
     pilot = Pilot(grid, reader, look, move, world_cal=_cal(s_forward=2.0, s_strafe=2.0))
     assert pilot.gains.strafe_kp == pytest.approx(base.strafe_kp / 2.0)
     assert pilot.gains.fwd_kp == pytest.approx(base.fwd_kp / 2.0)
-    assert pilot.gains.hmove_kp == pytest.approx(base.hmove_kp / 2.0)
+    assert pilot.gains.translate_kp == pytest.approx(base.translate_kp / 2.0)
     # 視点系は不変
     assert pilot.gains.turn_kp == base.turn_kp
     assert pilot.gains.nav_turn_kp == base.nav_turn_kp

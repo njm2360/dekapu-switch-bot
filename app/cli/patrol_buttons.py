@@ -8,7 +8,7 @@ from app.cli._logging import setup_logging
 from app.control.actuator import MouseLookActuator
 from app.control.controller import PatrolGains
 from app.control.pilot import Pilot
-from app.control.telemetry import ControlLog
+from app.control.recording import ControlLog
 from app.mapping.mapper import RoomMapper
 from app.spatial.navigation import NavGrid, plan_path
 
@@ -47,7 +47,7 @@ def _plan_tour(
         path = plan_path(grid, cur, _standoff_xz(tgt, face_yaw, standoff))
         legs.append((name, tgt, path))
         if path is not None:
-            cur = path.reached_goal_cell
+            cur = path.snapped_goal_xz
     return legs
 
 
@@ -124,7 +124,10 @@ def _add_gain_args(parser) -> None:
         "--speed", type=float, default=d.speed, help="巡航前進速度の上限(0..1)"
     )
     parser.add_argument(
-        "--arrive", type=float, default=d.arrive, help="ウェイポイント到達半径[m]"
+        "--arrive-radius",
+        type=float,
+        default=d.arrive_radius,
+        help="ウェイポイント到達半径[m]",
     )
     parser.add_argument(
         "--nav-lookahead",
@@ -142,9 +145,9 @@ def _add_gain_args(parser) -> None:
         "--face-tol", type=float, default=d.face_tol, help="正対とみなす角度[deg]"
     )
     parser.add_argument(
-        "--settle",
+        "--settle-frames",
         type=int,
-        default=d.settle,
+        default=d.settle_frames,
         help="収束に必要な、連続で正対を保ったフレーム数",
     )
     parser.add_argument(
@@ -153,7 +156,7 @@ def _add_gain_args(parser) -> None:
     parser.add_argument(
         "--face-timeout", type=float, default=d.face_timeout, help="正対の打切り秒"
     )
-    # 正対(face)の yaw: 視点軸は0.50以下が反応しないので out_deadzone で飛び越える(OSC用)。
+    # 正対(face)の yaw: 視点軸は0.50以下が反応しないので out_floor で飛び越える(OSC用)。
     parser.add_argument("--turn-kp", type=float, default=d.turn_kp)
     parser.add_argument("--turn-ki", type=float, default=d.turn_ki)
     parser.add_argument("--turn-kd", type=float, default=d.turn_kd)
@@ -176,12 +179,15 @@ def _add_gain_args(parser) -> None:
         default=d.nav_turn_deadzone,
         help="nav yaw の不感帯補償",
     )
-    # 視点固定の並進(move_to): 進行方向へ回さず前後+横で経路を追う。誤差=残距離[m]。
-    parser.add_argument("--hmove-kp", type=float, default=d.hmove_kp)
-    parser.add_argument("--hmove-ki", type=float, default=d.hmove_ki)
-    parser.add_argument("--hmove-kd", type=float, default=d.hmove_kd)
+    # 視点固定の並進(translate_to): 進行方向へ回さず前後+横で経路を追う。誤差=残距離[m]。
+    parser.add_argument("--translate-kp", type=float, default=d.translate_kp)
+    parser.add_argument("--translate-ki", type=float, default=d.translate_ki)
+    parser.add_argument("--translate-kd", type=float, default=d.translate_kd)
     parser.add_argument(
-        "--hmove-ilim", type=float, default=d.hmove_ilim, help="並進積分項の絶対上限"
+        "--translate-ilim",
+        type=float,
+        default=d.translate_ilim,
+        help="並進積分項の絶対上限",
     )
     parser.add_argument("--pitch-kp", type=float, default=d.pitch_kp)
     parser.add_argument("--pitch-ki", type=float, default=d.pitch_ki)

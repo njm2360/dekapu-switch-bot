@@ -50,7 +50,7 @@ def main() -> None:
     osc = VRChatOSC(host=args.host, port=args.port)
     try:
         osc.hud_enable(True)
-        osc.run(True)  # 実運用と同じ Run 押しっぱなし条件で測る
+        osc.set_run(True)  # 実運用と同じ Run 押しっぱなし条件で測る
         deadline = time.monotonic() + 10.0
         while reader.get_latest() is None:
             if time.monotonic() > deadline:
@@ -92,7 +92,7 @@ def main() -> None:
         applied = cal.apply(PatrolGains())
         g = applied.gains
         print(
-            f"  gains: fwd_kp {g.fwd_kp:.2f}  hmove_kp {g.hmove_kp:.2f}  "
+            f"  gains: fwd_kp {g.fwd_kp:.2f}  translate_kp {g.translate_kp:.2f}  "
             f"strafe_kp {g.strafe_kp:.2f}  speed {g.speed:.2f}"
         )
         for n in applied.notes:

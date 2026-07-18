@@ -30,11 +30,11 @@ class ListRecorder:
 
 
 class ControlLog:
-    """行を CSV に書き出す Recorder(実機ログ・sim-video の入力)。列は FIELDS 固定。"""
+    """行を CSV に書き出す Recorder(実機ログ・log-video の入力)。列は FIELDS 固定。"""
 
     FIELDS = [
         "t",  # 開始からの経過秒
-        "phase",  # nav / move / face / turn / align
+        "phase",  # nav / translate(旧move) / face / turn / align
         "target",  # ターゲット名
         "wp",  # 追従中のウェイポイント番号(nav/moveのみ)
         "dt",  # 前フレームからの実経過秒

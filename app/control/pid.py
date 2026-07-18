@@ -16,9 +16,10 @@ class PID:
     out_min: float = -1.0
     out_max: float = 1.0
     i_limit: float = 1.0  # 積分項(ki*∫e)の絶対値上限
-    # 出力の不感帯補償。>0 なら非ゼロ出力を最低 out_deadzone まで底上げする
-    # (VRChat 視点軸のような機器側不感帯を打ち消す)。
-    out_deadzone: float = 0.0
+    # 非ゼロ出力の下限(不感帯補償)。>0 なら非ゼロ出力を最低 out_floor まで
+    # 底上げする(VRChat 視点軸のような機器側不感帯を打ち消す)。小出力をゼロに
+    # 潰す「出力不感帯」ではなく、その逆方向の補償であることに注意。
+    out_floor: float = 0.0
     _i: float = field(default=0.0, init=False, repr=False)
     _prev: float | None = field(default=None, init=False, repr=False)
     # 直近 update() の内訳(ログ/デバッグ用)
@@ -61,10 +62,10 @@ class PID:
 
         i = self.ki * self._i
         out = max(self.out_min, min(self.out_max, p + i + d))
-        # 不感帯補償: 非ゼロ出力を [out_deadzone, 1] へ線形リマップ(符号保持)
-        if self.out_deadzone > 0.0 and abs(out) > 1e-3:
+        # 不感帯補償: 非ゼロ出力を [out_floor, 1] へ線形リマップ(符号保持)
+        if self.out_floor > 0.0 and abs(out) > 1e-3:
             out = math.copysign(
-                self.out_deadzone + (1.0 - self.out_deadzone) * min(abs(out), 1.0), out
+                self.out_floor + (1.0 - self.out_floor) * min(abs(out), 1.0), out
             )
             # レール(out_min/out_max)が ±1 より狭いと底上げで超えうるので再クランプ
             out = max(self.out_min, min(self.out_max, out))

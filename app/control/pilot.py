@@ -19,11 +19,11 @@ from .maneuvers import (
     PoseSource,
     aim_at,
     follow_path,
-    follow_path_hold_view,
+    follow_path_translate,
     strafe_align,
     turn_to,
 )
-from .telemetry import NullRecorder, Recorder
+from .recording import NullRecorder, Recorder
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,7 @@ class Pilot:
         reader = PoseReader(source=WindowsVRChatCapture()).start()
         osc = VRChatOSC()
         osc.hud_enable(True)
-        osc.run(True)
+        osc.set_run(True)
         return cls(
             grid,
             reader,
@@ -143,7 +143,9 @@ class Pilot:
         res.path = path
         return res
 
-    def move_to(self, xz: tuple[float, float], *, name: str = "move") -> NavResult:
+    def translate_to(
+        self, xz: tuple[float, float], *, name: str = "translate"
+    ) -> NavResult:
         """視点を回さず xz へ並進する(壁回避は goto と同じ plan_path)。
 
         前後+横移動で経路を追うため、横に曲がる経路では goto より遅い。
@@ -164,7 +166,7 @@ class Pilot:
             path.length,
             " (goal on wall -> nearest floor)" if path.goal_blocked else "",
         )
-        res = follow_path_hold_view(
+        res = follow_path_translate(
             self.reader,
             self.look,
             self.move,
@@ -252,7 +254,7 @@ class Pilot:
     ) -> tuple[NavResult, AimResult | None]:
         d = self.gains.standoff if standoff is None else standoff
         nav = self.goto(self._standoff_goal(xyz, d, face_yaw_deg), name=name)
-        if not nav.reached:
+        if not nav.path_found:
             return nav, None
         aim = self.aim(xyz, name=name)
         logger.info(

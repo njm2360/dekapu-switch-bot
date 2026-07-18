@@ -1,4 +1,4 @@
-from app.control.telemetry import AxisAccumulator
+from app.control.recording import AxisAccumulator
 
 
 def _feed(errors, tol=0.5, dt=0.05):

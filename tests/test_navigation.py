@@ -157,7 +157,7 @@ def test_goal_on_wall_routes_to_nearest_free():
     path = plan_path(grid, (3.0, 2.5), (6.5, 2.5))
     assert path is not None
     assert path.goal_blocked
-    r, c = grid.world_to_cell(*path.reached_goal_cell)
+    r, c = grid.world_to_cell(*path.snapped_goal_xz)
     assert grid.is_free(r, c)
 
 
@@ -341,7 +341,7 @@ def test_goal_on_full_partition_snaps_to_start_side():
     path = plan_path(grid, (2.0, 2.5), (5.0, 2.5))
     assert path is not None
     assert path.goal_blocked
-    assert path.reached_goal_cell[0] < 5.0  # 到達セルはスタート側(x<5)
+    assert path.snapped_goal_xz[0] < 5.0  # 到達セルはスタート側(x<5)
 
 
 def test_goal_in_far_room_returns_none():
@@ -367,7 +367,7 @@ def test_goal_on_pillar_face_snaps_to_room_side():
     path = plan_path(grid, (1.0, 1.0), (3.0, 4.0))
     assert path is not None
     assert path.goal_blocked
-    assert path.reached_goal_cell[0] < 3.0  # 部屋側に到達
+    assert path.snapped_goal_xz[0] < 3.0  # 部屋側に到達
 
 
 def test_goal_at_pillar_center_returns_none():

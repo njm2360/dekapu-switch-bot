@@ -17,7 +17,7 @@ CAL_AXES = ("forward", "strafe")
 
 # 移動軸の入力不感帯オンセット(cmd 単位、クライアント側なのでワールド不変)
 MOVE_DEADBAND_CMD = 0.10
-# 失速下限クランプの安全率(kp·arrive > 不感帯×これ を保証する)
+# 失速下限クランプの安全率(kp·arrive_radius > 不感帯×これ を保証する)
 _STALL_MARGIN = 1.2
 
 # ゲイン調整時の基準値。再同定したら deadzone 定数と同様にここも更新する
@@ -39,23 +39,23 @@ class ScaleEstimate:
 
 
 def estimate_scale(
-    probe: AxisModel,
+    model: AxisModel,
     *,
     ref_speed: float | None = None,
     s_min: float = 0.05,
     agree_tol: float = 0.2,
 ) -> ScaleEstimate:
     """±1.0 プローブの同定結果から速度倍率(実測速度/基準速度の中央値)を測る"""
-    ref = REF_SPEED[probe.axis] if ref_speed is None else ref_speed
-    rates = [(c, r) for c, r in probe.points if abs(c) >= 0.99]
+    ref = REF_SPEED[model.axis] if ref_speed is None else ref_speed
+    rates = [(c, r) for c, r in model.points if abs(c) >= 0.99]
     scales = [r / (c * ref) for c, r in rates]
 
     def bad(reason: str, scale: float = 0.0) -> ScaleEstimate:
         return ScaleEstimate(
-            axis=probe.axis,
+            axis=model.axis,
             scale=scale,
             rates=rates,
-            deadtime_s=probe.deadtime_s,
+            deadtime_s=model.deadtime_s,
             usable=False,
             reason=reason,
         )
@@ -74,10 +74,10 @@ def estimate_scale(
             s,
         )
     return ScaleEstimate(
-        axis=probe.axis,
+        axis=model.axis,
         scale=s,
         rates=rates,
-        deadtime_s=probe.deadtime_s,
+        deadtime_s=model.deadtime_s,
         usable=True,
         reason="",
     )
@@ -131,7 +131,7 @@ def scale_gains(
     """移動系ゲインを速度倍率で再スケールした PatrolGains を導出する。
 
     kp/ki/kd を 1/s 倍して実効ループゲイン(ωc ≈ kp·K)を保つ。視点系はワールド
-    不変なので触らない。失速下限(kp·arrive > 移動不感帯)を割るスケールはクランプ
+    不変なので触らない。失速下限(kp·arrive_radius > 移動不感帯)を割るスケールはクランプ
     する。cap_cruise は速いワールドで巡航指令を下げ、実巡航速度を調整済みワールドと
     揃える(carrot 先読みと到達の幾何を変えないため)。遅いワールドは安全側なので
     上げない。倍率は estimate_scale の usable な値だけを渡すこと(s≈0 は発散する)。
@@ -150,14 +150,16 @@ def scale_gains(
             return floor
         return v
 
-    fwd_floor = move_deadband * _STALL_MARGIN / base.arrive
+    fwd_floor = move_deadband * _STALL_MARGIN / base.arrive_radius
     fwd_kp = scaled("fwd_kp", base.fwd_kp, s_forward, fwd_floor)
     fwd_kd = base.fwd_kd / s_forward
-    # hmove は斜め45°で誤差が両体軸へ √2 分配されるので下限も √2 倍
-    hmove_floor = move_deadband * _STALL_MARGIN * math.sqrt(2.0) / base.arrive
-    hmove_kp = scaled("hmove_kp", base.hmove_kp, s_trans, hmove_floor)
-    hmove_ki = base.hmove_ki / s_trans
-    hmove_kd = base.hmove_kd / s_trans
+    # translate は斜め45°で誤差が両体軸へ √2 分配されるので下限も √2 倍
+    translate_floor = (
+        move_deadband * _STALL_MARGIN * math.sqrt(2.0) / base.arrive_radius
+    )
+    translate_kp = scaled("translate_kp", base.translate_kp, s_trans, translate_floor)
+    translate_ki = base.translate_ki / s_trans
+    translate_kd = base.translate_kd / s_trans
     # align strafe は不感帯補償持ちなので失速下限は不要
     strafe_kp = base.strafe_kp / s_strafe
     strafe_ki = base.strafe_ki / s_strafe
@@ -177,9 +179,9 @@ def scale_gains(
         base,
         fwd_kp=fwd_kp,
         fwd_kd=fwd_kd,
-        hmove_kp=hmove_kp,
-        hmove_ki=hmove_ki,
-        hmove_kd=hmove_kd,
+        translate_kp=translate_kp,
+        translate_ki=translate_ki,
+        translate_kd=translate_kd,
         strafe_kp=strafe_kp,
         strafe_ki=strafe_ki,
         strafe_kd=strafe_kd,

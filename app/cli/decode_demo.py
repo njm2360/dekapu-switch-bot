@@ -34,7 +34,7 @@ def main() -> None:
             if args.stats and time.monotonic() - last_stats >= 1.0:
                 s = reader.get_stats()
                 print(
-                    f"  [stats] frame_fps={s.frame_fps:5.1f} capture_fps={s.capture_fps:5.1f} "
+                    f"  [stats] pose_fps={s.pose_fps:5.1f} capture_fps={s.capture_fps:5.1f} "
                     f"ok={s.success_rate:5.1%} dup={s.duplicate_skipped} "
                     f"consec_fail={s.consecutive_fail}"
                 )
@@ -47,7 +47,7 @@ def main() -> None:
         reader.stop()
         s = reader.get_stats()
         print(
-            f"\nstopped. grabbed={s.frames_grabbed} new_frames={s.new_frames} "
+            f"\nstopped. grabbed={s.frames_grabbed} new_poses={s.new_poses} "
             f"ok_rate={s.success_rate:.1%}"
         )
 

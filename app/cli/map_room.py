@@ -35,7 +35,7 @@ def _handle_key(
     elif ch in ("z", "Z"):
         cmd_q.put("rewind")
     elif ch in ("r", "R"):
-        cmd_q.put("redo")
+        cmd_q.put("discard")
     elif ch in ("q", "Q", "escape", "\x1b", "\x03"):  # q / ESC / Ctrl+C
         stop_evt.set()
 
@@ -65,7 +65,7 @@ def main() -> None:
     ).start()
     print(
         "recording...  SPACE=pause/resume  o=outer  i=inner(hole)  "
-        "z=rewind  r=redo segment  q=save and quit"
+        "z=rewind  r=discard segment  q=save and quit"
     )
     if live.headless:
         print("  (no GUI available for the live map; text output only)")
@@ -92,9 +92,9 @@ def main() -> None:
                 elif cmd == "rewind":
                     n = mapper.rewind(REWIND_DIST)
                     print(f"  rewind: dropped {n} pts (walk the wall again)")
-                elif cmd == "redo":
-                    n = mapper.redo_segment()
-                    print(f"  redo: discarded {n} pts of the current segment")
+                elif cmd == "discard":
+                    n = mapper.discard_segment()
+                    print(f"  discard: dropped {n} pts of the current segment")
 
             pose = reader.get_latest()
             if pose is not None and pose.time_ms != last_t:
@@ -143,7 +143,7 @@ def main() -> None:
         print("no trajectory collected; nothing saved.")
         return
 
-    from app.mapping.render import render_map  # Agg 固定なので保存時のみ import
+    from app.mapping.draw import save_map_png
 
     out_dir = Path("maps") / datetime.now().strftime("%Y%m%d_%H%M%S")
     npz = mapper.save(out_dir / "room")
@@ -155,7 +155,7 @@ def main() -> None:
         f"{s['segments']} seg: outer={s['outer_segments']} inner={s['inner_segments']})"
     )
     print(f"saved: {npz}  {npz.with_suffix('.json')}")
-    print(f"map:   {render_map(mapper, out_dir / 'room')}")
+    print(f"map:   {save_map_png(mapper, out_dir / 'room')}")
 
 
 if __name__ == "__main__":

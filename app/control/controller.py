@@ -84,12 +84,12 @@ class PatrolGains:
     speed: float = (
         0.9  # 巡航前進速度の上限(0..1)。狭所の壁擦りは経路追従で戻れるので許容
     )
-    arrive: float = 0.35  # ウェイポイント到達半径[m]
+    arrive_radius: float = 0.35  # ウェイポイント到達半径[m]
     nav_lookahead: float = 1.2  # 経路先読み(carrot)の弧長[m]。狭所は 0.8 程度に
     standoff: float = 1.0  # ボタン正面で止まる距離[m](Use到達距離内に収める)
     # ---- 収束判定・打切り ----
     face_tol: float = 2.0  # 正対(粗合わせ)とみなす角度[deg]
-    settle: int = 3  # 収束判定に必要な連続フレーム数(face / align 共通)
+    settle_frames: int = 3  # 収束判定に必要な連続フレーム数(face / align 共通)
     nav_timeout: float = 60.0  # 移動の打切り秒
     face_timeout: float = 12.0  # 正対の打切り秒
     # ---- 移動中(nav)の yaw: face と同機構の不感帯補償つき(tol は入れない)。
@@ -99,14 +99,14 @@ class PatrolGains:
     nav_turn_deadzone: float = 0.50
     # ---- 視点固定の並進(hold-view move): 進行方向へ回さず forward/strafe を体フレームで
     #      合成して経路を追う。誤差=目標までの残距離[m]の体フレーム成分。指令上限は speed。 ----
-    hmove_kp: float = 1.0  # 安全域 0.45〜約2.5(下は不感帯で失速、上は振動)
-    hmove_ki: float = 0.0  # 定常外乱が無ければ0(入れると斜めで微小な行き過ぎ)
-    hmove_kd: float = 0.0  # 打ち消す遅れが無く GM を削るだけ(0.1 で GM ×9→×1.4)
-    hmove_ilim: float = 0.3
+    translate_kp: float = 1.0  # 安全域 0.45〜約2.5(下は不感帯で失速、上は振動)
+    translate_ki: float = 0.0  # 定常外乱が無ければ0(入れると斜めで微小な行き過ぎ)
+    translate_kd: float = 0.0  # 打ち消す遅れが無く GM を削るだけ(0.1 で GM ×9→×1.4)
+    translate_ilim: float = 0.3
     # ---- 前進速度(最終ウェイポイントの減速): 誤差=距離[m] ----
     fwd_kp: float = 2.0
     fwd_kd: float = 0.05
-    # ---- 正対(face)の yaw: 視点軸が反応しない範囲(0.50)を out_deadzone で飛び越える。
+    # ---- 正対(face)の yaw: 視点軸が反応しない範囲(0.50)を out_floor で飛び越える。
     #      kd は入れない(打ち消す遅れが無く、高周波ゲインを上げて GM を削るだけ) ----
     turn_kp: float = 0.05
     turn_ki: float = 0.005
@@ -142,7 +142,7 @@ def nav_controllers(g: PatrolGains) -> NavControllers:
             out_min=-1.0,
             out_max=1.0,
             i_limit=0.5,
-            out_deadzone=g.nav_turn_deadzone,
+            out_floor=g.nav_turn_deadzone,
         )
     )
     forward = AxisController(
@@ -155,20 +155,20 @@ def translate_controllers(g: PatrolGains) -> TranslateControllers:
     """視点固定の並進用の制御器を組む。前後・左右を同じゲインの独立 PID で詰める。
 
     指令は両軸とも ±speed に制限する。移動軸の不感帯は小さく(|指令|<0.10 で
-    速度ゼロ)、kp·arrive がこれを上回る限り目標手前で失速しないため補償は入れない
-    (kp > 0.10/arrive ≈ 0.29 を保つこと)。前後と左右で実速度は非対称(forward が
+    速度ゼロ)、kp·arrive_radius がこれを上回る限り目標手前で失速しないため補償は入れない
+    (kp > 0.10/arrive_radius ≈ 0.29 を保つこと)。前後と左右で実速度は非対称(forward が
     strafe の約2倍)だが、各軸が独立に残距離を詰めるだけなので同ゲインで運用する。
     """
 
     def axis() -> AxisController:
         return AxisController(
             PID(
-                kp=g.hmove_kp,
-                ki=g.hmove_ki,
-                kd=g.hmove_kd,
+                kp=g.translate_kp,
+                ki=g.translate_ki,
+                kd=g.translate_kd,
                 out_min=-g.speed,
                 out_max=g.speed,
-                i_limit=g.hmove_ilim,
+                i_limit=g.translate_ilim,
             )
         )
 
@@ -186,7 +186,7 @@ def strafe_controller(g: PatrolGains) -> AxisController:
             out_min=-1.0,
             out_max=1.0,
             i_limit=g.strafe_ilim,
-            out_deadzone=g.strafe_deadzone,
+            out_floor=g.strafe_deadzone,
         ),
         tol=g.align_tol,
     )
@@ -202,7 +202,7 @@ def face_controllers(g: PatrolGains) -> FaceControllers:
             out_min=-1.0,
             out_max=1.0,
             i_limit=g.turn_ilim,
-            out_deadzone=g.turn_deadzone,
+            out_floor=g.turn_deadzone,
         ),
         tol=g.face_tol,
     )
@@ -214,7 +214,7 @@ def face_controllers(g: PatrolGains) -> FaceControllers:
             out_min=-1.0,
             out_max=1.0,
             i_limit=g.pitch_ilim,
-            out_deadzone=g.pitch_deadzone,
+            out_floor=g.pitch_deadzone,
         ),
         tol=g.face_tol,
     )

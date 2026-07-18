@@ -93,9 +93,14 @@ def words_to_pose(words: np.ndarray) -> Pose:
     )
 
 
-def decode_pose(frame: np.ndarray) -> DecodeResult:
+def decode_frame(frame: np.ndarray) -> DecodeResult:
     """フレームをデコードし検証まで行う(重複フレーム判定は PoseReader 側)。"""
     words = decode_words(frame)
     status = validate_words(words)
     pose = words_to_pose(words) if status is DecodeStatus.OK else None
     return DecodeResult(status=status, words=words, pose=pose)
+
+
+def decode_pose(frame: np.ndarray) -> Pose | None:
+    """検証込みでデコードし、有効なら Pose を返す(失敗は None)。"""
+    return decode_frame(frame).pose

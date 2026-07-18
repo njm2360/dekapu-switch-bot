@@ -72,7 +72,7 @@ class OccupancyGrid:
     cell: float  # 1セルの辺長 [m]
     bounds: Bounds  # グリッドが覆う XZ 範囲(pad込み)
 
-    def world_to_index(self, x: float, z: float) -> tuple[int, int]:
+    def world_to_cell(self, x: float, z: float) -> tuple[int, int]:
         col = int((x - self.bounds.xmin) / self.cell)
         row = int((z - self.bounds.zmin) / self.cell)
         return row, col
@@ -91,7 +91,7 @@ class RoomMapper:
 
     セグメントは kind を持つ(outer=外周 / inner=内壁)。外周は部屋の外リング、内壁は
     穴(柱・中庭など「回」型の内側)として room_polygon で扱う。set_mode でモード切替。
-    壁から浮いた時の補正は rewind(末尾を距離ぶん消す)と redo_segment(現在セグメント
+    壁から浮いた時の補正は rewind(末尾を距離ぶん消す)と discard_segment(現在セグメント
     を丸ごと破棄)。
     """
 
@@ -188,7 +188,7 @@ class RoomMapper:
         self._refresh_last_xz()
         return removed
 
-    def redo_segment(self) -> int:
+    def discard_segment(self) -> int:
         """現在セグメントを丸ごと破棄する。ID とモードは維持され、同じセグメントに
         取り直せる。破棄した点数を返す。"""
         removed = 0

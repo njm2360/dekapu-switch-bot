@@ -11,7 +11,7 @@ VRChat 画面(HUDビットグリッド)
 [capture]  WindowsVRChatCapture ──► フレーム(numpy)
     │
     ▼
-[decode]   decode_pose ──► Pose(位置・前方・上方・時刻)+ 検証
+[decode]   decode_frame ──► DecodeResult(Pose + 検証結果)
     │
     ▼
 [reader]   PoseReader(スレッドで読み続ける・統計・コールバック/ジェネレータ)
@@ -47,7 +47,7 @@ VRChat 画面(HUDビットグリッド)
 | ----------------------- | --------------------------------------------------------------- |
 | `perception/spec.py`    | グリッド/プロトコルの確定定数(モジュール定数。シェーダーと一致) |
 | `perception/capture.py` | Windows/VRChat ウィンドウキャプチャ(DPI対応、`FrameSource`)     |
-| `perception/decode.py`  | numpy ベクトル化デコード + 検証(`decode_pose`)                  |
+| `perception/decode.py`  | numpy ベクトル化デコード + 検証(`decode_frame` / `decode_pose`)                  |
 | `perception/encode.py`  | 合成エンコーダ(`render_pose`)。テスト用                         |
 | `perception/reader.py`  | `PoseReader`(スレッドで読み続ける・統計・ジェネレータ)          |
 
@@ -56,8 +56,7 @@ VRChat 画面(HUDビットグリッド)
 | モジュール          | 役割                                                                |
 | ------------------- | ------------------------------------------------------------------- |
 | `mapping/mapper.py` | `RoomMapper`。軌跡→寸法・占有グリッド・外周/内壁ポリゴン・保存/読込 |
-| `mapping/draw.py`   | 地図の描画ロジック(バックエンド非依存の `draw_map`)                 |
-| `mapping/render.py` | 間取り図の PNG 保存(matplotlib Agg)                                 |
+| `mapping/draw.py`   | 地図の描画・PNG 保存(バックエンド非依存の `draw_map` / `save_map_png`) |
 | `mapping/live.py`   | 録画中のライブ地図表示(matplotlib インタラクティブ)                 |
 
 ### `spatial/` — 空間推定・経路計画
@@ -76,7 +75,7 @@ VRChat 画面(HUDビットグリッド)
 | `control/controller.py` | `AxisController`(PID+tolゲート)/ `PatrolGains` / 制御器ビルダー                        |
 | `control/actuator.py`   | `LookActuator`/`MoveActuator` IF + `MouseLookActuator`(DirectInput)                    |
 | `control/osc.py`        | VRChat への OSC 送信(look/move/stop で両 actuator IF を満たす)                         |
-| `control/telemetry.py`  | `Recorder` IF(`ControlLog`=CSV / `ListRecorder`)+ `AxisMetrics`(応答指標)              |
+| `control/recording.py`  | `Recorder` IF(`ControlLog`=CSV / `ListRecorder`)+ `AxisMetrics`(応答指標)              |
 | `control/maneuvers.py`  | 制御ループの部品(`follow_path`(carrot追従)/ `aim_at` / `strafe_align` / `turn_to`)     |
 | `control/pilot.py`      | `Pilot` ファサード(経路計画+ループ連結。実機 I/O は `connect()` に集約)                |
 
@@ -85,7 +84,7 @@ VRChat 画面(HUDビットグリッド)
 | モジュール          | 役割                                                                                   |
 | ------------------- | -------------------------------------------------------------------------------------- |
 | `sysid/identify.py` | システム同定(プローブ注入・静特性/むだ時間/dt 抽出・`PlantModel` JSON)                 |
-| `sysid/simplant.py` | `SimulatedVRChat`(同定モデルを積分。PoseSource+両 Actuator を満たし制御ループに注入可) |
+| `sysid/sim_plant.py` | `SimulatedVRChat`(同定モデルを積分。PoseSource+両 Actuator を満たし制御ループに注入可) |
 
 ## CLI(`app/cli/`, console scripts)
 
@@ -97,4 +96,4 @@ VRChat 画面(HUDビットグリッド)
 | `patrol-buttons` | `cli/patrol_buttons.py` | マップ上でボタンを壁を避けて巡回(OSC + PID)                       |
 | `probe-axes`     | `cli/probe_axes.py`     | 入力軸の応答特性を測定し `plant.json` に同定(--from-log で再同定) |
 | `sim-face`       | `cli/sim_face.py`       | 同定プラント上で正対ループを回しゲインを検証(実機不要)            |
-| `sim-video`      | `cli/sim_video.py`      | 制御ログCSVを一人称3D+2D地図の動画に再生(目視確認用)              |
+| `log-video`      | `cli/log_video.py`      | 制御ログCSVを一人称3D+2D地図の動画に再生(目視確認用)              |

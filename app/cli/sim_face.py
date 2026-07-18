@@ -12,9 +12,9 @@ from app.cli._logging import setup_logging
 from app.cli.patrol_buttons import _add_gain_args
 from app.control.controller import PatrolGains, face_controllers
 from app.control.maneuvers import turn_to
-from app.control.telemetry import ControlLog, ListRecorder
+from app.control.recording import ControlLog, ListRecorder
 from app.sysid.identify import PlantModel
-from app.sysid.simplant import SimClock, SimulatedVRChat
+from app.sysid.sim_plant import SimClock, SimulatedVRChat
 
 
 def main() -> None:

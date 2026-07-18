@@ -135,7 +135,7 @@ def _run_live(axes: list[str], out_dir: Path, args) -> list[ProbeRun]:
     runs: list[ProbeRun] = []
     try:
         osc.hud_enable(True)
-        osc.run(True)
+        osc.set_run(True)
         deadline = time.monotonic() + 10.0
         while reader.get_latest() is None:
             if time.monotonic() > deadline:

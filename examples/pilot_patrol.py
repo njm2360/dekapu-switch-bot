@@ -9,7 +9,7 @@ from pathlib import Path
 
 from app.control.controller import PatrolGains
 from app.control.pilot import Pilot
-from app.control.telemetry import ControlLog
+from app.control.recording import ControlLog
 from app.mapping.mapper import RoomMapper
 from app.spatial.navigation import NavGrid
 
@@ -23,7 +23,7 @@ TARGETS = [
     ("switch2", (-1.0, 1.0, 2.0), 90.0),
 ]
 
-# recorder は省略可。渡すと制御ログが残り、sim-video で再生できる
+# recorder は省略可。渡すと制御ログが残り、log-video で再生できる
 log = ControlLog(Path("logs/example_patrol.csv"))
 
 # 実機 I/O(HUD キャプチャ + OSC)を接続。視点をマウスにするなら look=MouseLookActuator(...)
@@ -34,7 +34,7 @@ with Pilot.connect(grid, gains=PatrolGains(speed=0.7), recorder=log) as pilot:
 
     # フェーズ単位でも呼べる
     pilot.goto((0.0, 0.0))  # 壁を避けて移動
-    pilot.move_to((1.0, 1.0))  # 視点を固定したまま並進
+    pilot.translate_to((1.0, 1.0))  # 視点を固定したまま並進
     pilot.aim((3.0, 1.2, 5.0))  # その場で正対(yaw+pitch)
     pilot.align((3.0, 1.2, 5.0))  # 横移動で視線上に載せる
     pilot.turn_to(90.0)  # 指定方位を向く
