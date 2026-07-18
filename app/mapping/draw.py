@@ -70,8 +70,6 @@ def draw_map(
             label=(None if seen[kind] else f"{kind} wall"),
         )
         seen[kind] = True
-    ax.plot(pts[0, 0], pts[0, 1], "o", color="#2ca02c", ms=9, label="start")
-    ax.plot(pts[-1, 0], pts[-1, 1], "s", color="#9467bd", ms=8, label="now")
 
     ax.set_aspect("equal", adjustable="datalim")
     ax.grid(True, ls=":", alpha=0.5)

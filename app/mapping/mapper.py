@@ -451,22 +451,14 @@ class RoomMapper:
     def load(cls, path: str | Path) -> RoomMapper:
         """save() で書いた npz から復元する。"""
         data = np.load(Path(path).with_suffix(".npz"))
-        m = cls(min_move=float(data["min_move"]) if "min_move" in data else 0.0)
-        xyz = data["xyz"]
-        yaw = data["yaw"] if "yaw" in data else np.zeros(len(xyz))
-        t = data["time_ms"] if "time_ms" in data else np.zeros(len(xyz), np.uint32)
-        seg = data["seg"] if "seg" in data else np.zeros(len(xyz), np.int32)
-        m._xyz = [tuple(map(float, row)) for row in xyz]
-        m._yaw = [float(v) for v in yaw]
-        m._t = [int(v) for v in t]
+        m = cls(min_move=float(data["min_move"]))
+        seg = data["seg"]
+        m._xyz = [tuple(map(float, row)) for row in data["xyz"]]
+        m._yaw = [float(v) for v in data["yaw"]]
+        m._t = [int(v) for v in data["time_ms"]]
         m._seg = [int(v) for v in seg]
         m._cur_seg = int(seg[-1]) if len(seg) else 0
-        if "kind" in data:
-            m._kind = [_KINDS[int(v)] for v in data["kind"]]
-        else:  # 旧フォーマット: 全て外周
-            m._kind = ["outer"] * (m._cur_seg + 1)
-        if len(m._kind) <= m._cur_seg:  # 念のため長さを保証
-            m._kind += ["outer"] * (m._cur_seg + 1 - len(m._kind))
+        m._kind = [_KINDS[int(v)] for v in data["kind"]]
         m._mode = m._kind[m._cur_seg]
         if m._xyz:
             m._last_xz = (m._xyz[-1][0], m._xyz[-1][2])
