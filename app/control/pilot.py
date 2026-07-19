@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 from ..core.pose import Pose
+from ..perception.reader import ReaderStats
 from ..spatial.navigation import NavGrid, Path, plan_path
 from ..sysid.worldcal import WorldCalibration
 from .actuator import InteractActuator, LookActuator, MoveActuator
@@ -63,6 +64,17 @@ class ActivateResult:
 
 
 class Pilot:
+    """VRChat 内で移動・照準・押下をまとめて呼び出すためのクラス。
+
+    現在位置と向きは reader(6DoF ポーズ)から読み、look(視点)・move(移動)・
+    interact(押下)の各アクチュエータへ指令を出す。実機の I/O ごと組むなら
+    connect()、テストや部品差し替えは __init__ に直接渡す。
+
+    position() や distance_to() などの状態クエリは動かずに現在値を返す。
+    goto()/aim()/activate() などの操作はブロッキングで、別スレッドから cancel()
+    すると reason="cancelled" で抜ける。
+    """
+
     def __init__(
         self,
         grid: NavGrid,
@@ -77,6 +89,11 @@ class Pilot:
         osc=None,
         owns_io: bool = False,
     ):
+        """各アクチュエータと reader を直接渡す注入版(実機 I/O 込みは connect())。
+
+        interact 省略時は押下系(press/click/activate)が RuntimeError になる。
+        world_cal を渡すと gains に速度スケールを反映する。
+        """
         self.grid = grid
         self.reader = reader
         self.look = look
@@ -209,12 +226,13 @@ class Pilot:
             return None
         return pitch_error(pose.position, pose.forward, target)
 
-    def stats(self):
+    def stats(self) -> ReaderStats | None:
         """PoseReader の統計スナップショット(注入 reader が未対応なら None)。"""
         get = getattr(self.reader, "get_stats", None)
         return get() if callable(get) else None
 
     def wait_until_hud(self, timeout: float = 10.0) -> bool:
+        """HUD(ポーズ)が最初に読めるまで待つ(timeout 超過・cancel() で False)。"""
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if self._cancel.is_set():
@@ -230,8 +248,8 @@ class Pilot:
     def is_hud_alive(self, timeout: float = 1.0) -> bool:
         """新規フレームが timeout 秒以内に来るかを確認する(ブロッキング)。
 
-        wait_until_hud と違い「一度でも読めたか」ではなく「今も更新されているか」を見る。
-        長時間運転でメニュー開放・ウィンドウ消失を検知する用。
+        wait_until_hud が一度でも読めたかを見るのに対し、今も更新されているかを見る。
+        長く走らせている間にメニューを開いたりウィンドウが消えたのを見つける用。
         """
         pose = self.reader.get_latest()
         last = pose.time_ms if pose else None
@@ -279,8 +297,8 @@ class Pilot:
     def face_yaw_to(self, xyz: Iterable[float]) -> float | None:
         """現在位置から見た目標面の法線方向(目標→現在地の方位)[deg]。
 
-        目標の向きが事前に分からない時、standoff_point / visit の face_yaw_deg に
-        渡すと「今いる側の正面」に立てる。ポーズ未取得なら None。
+        目標の向きが事前に分からない時、standoff_point / approach の face_yaw_deg に
+        渡すと今いる側の正面に立てる。ポーズ未取得なら None。
         """
         cur = self.xz()
         if cur is None:
@@ -342,10 +360,12 @@ class Pilot:
 
     @property
     def cancelled(self) -> bool:
+        """cancel() 済みで、resume() するまで操作が中断される状態か。"""
         return self._cancel.is_set()
 
     # ---- 移動(act) ----------------------------------------------------
     def goto(self, xz: tuple[float, float], *, name: str = "goto") -> NavResult:
+        """xz へ経路計画して移動する(壁回避あり。視点は進行方向へ向く)。"""
         pose = self.reader.get_latest()
         if pose is None:
             logger.warning("[%s] no current pose (HUD?)", name)
@@ -416,6 +436,7 @@ class Pilot:
     def follow(
         self, waypoints: Iterable[tuple[float, float]], *, name: str = "follow"
     ) -> NavResult:
+        """与えた waypoints をそのまま追従する(経路計画なし。goto の低レベル版)。"""
         return follow_path(
             self.reader,
             self.look,
@@ -429,6 +450,7 @@ class Pilot:
         )
 
     def aim(self, xyz: tuple[float, float, float], *, name: str = "aim") -> AimResult:
+        """target(x,y,z)へ視点(yaw/pitch)を向ける(体は動かさない)。"""
         return aim_at(
             self.reader,
             self.look,
@@ -443,6 +465,7 @@ class Pilot:
     def align(
         self, xyz: tuple[float, float, float], *, name: str = "align"
     ) -> AimResult:
+        """視点は回さず、体の横移動で target への横ずれを詰める(最終照準)。"""
         return strafe_align(
             self.reader,
             self.look,
@@ -459,6 +482,7 @@ class Pilot:
     def turn_to(
         self, yaw_deg: float, pitch_deg: float | None = None, *, name: str = "turn"
     ) -> AimResult:
+        """指定した yaw(必要なら pitch)へ視点だけ回す(座標でなく角度で指定)。"""
         return turn_to(
             self.reader,
             self.look,
@@ -504,12 +528,15 @@ class Pilot:
         return self.interact
 
     def press(self) -> None:
+        """押しっぱなしにする(離すのは release。interact 未設定なら RuntimeError)。"""
         self._require_interact().press()
 
     def release(self) -> None:
+        """press した押下を離す。"""
         self._require_interact().release()
 
     def click(self) -> None:
+        """一回押して離す(interact 未設定なら RuntimeError)。"""
         self._require_interact().click()
 
     # ---- 複合(移動+照準+押下) ---------------------------------------
@@ -579,6 +606,7 @@ class Pilot:
         self,
         targets: Iterable[tuple[str, tuple[float, float, float], float]],
     ) -> list[tuple[str, NavResult, AimResult | None]]:
+        """(name, xyz, face_yaw) の並びを順に approach する(cancel() で途中終了)。"""
         results = []
         for name, xyz, face_yaw in targets:
             if self.cancelled:
@@ -589,6 +617,7 @@ class Pilot:
 
     # ---- ライフサイクル ------------------------------------------------
     def close(self) -> None:
+        """アクチュエータを止め、connect() で確保した I/O を閉じる。"""
         try:
             self.look.stop()
         except Exception:
