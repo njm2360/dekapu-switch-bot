@@ -160,16 +160,22 @@ class _ProbeRecorder:
         cmd: float,
         hold_s: float,
         stop_when: Callable | None = None,
+        *,
+        record: bool = True,
     ) -> None:
         """指令 cmd を保持しつつ記録する。stop_when(pose) が真になったら早期終了。
 
         新フレームのたびに指令を再送する(UDP 欠落対策)。ガード付きセグメントで
         HUD が blind_cap 以上途絶したら、ガードを見られないまま動き続けないよう
         指令を 0 に戻して打ち切る。
+
+        record=False なら latest とフレーム時計だけ更新し記録に残さない
+        (ホーミングなどの補助動作を静特性・むだ時間に混ぜない)。
         """
         send(cmd)
         t_send = self.monotonic()
-        self.starts.append((self._seg, cmd, t_send - self.t0))
+        if record:
+            self.starts.append((self._seg, cmd, t_send - self.t0))
         deadline = t_send + hold_s
         while (now := self.monotonic()) < deadline:
             pose = self.reader.get_latest()
@@ -177,20 +183,21 @@ class _ProbeRecorder:
                 self._last_ms = pose.time_ms
                 self._last_frame = now
                 self.latest = pose
-                p = pose.position
-                self.samples.append(
-                    ProbeSample(
-                        self._seg,
-                        cmd,
-                        now - self.t0,
-                        pose.time_ms,
-                        p[0],
-                        p[1],
-                        p[2],
-                        pose.yaw_deg,
-                        pose.pitch_deg,
+                if record:
+                    p = pose.position
+                    self.samples.append(
+                        ProbeSample(
+                            self._seg,
+                            cmd,
+                            now - self.t0,
+                            pose.time_ms,
+                            p[0],
+                            p[1],
+                            p[2],
+                            pose.yaw_deg,
+                            pose.pitch_deg,
+                        )
                     )
-                )
                 send(cmd)
                 if stop_when is not None and stop_when(pose):
                     break
@@ -213,8 +220,9 @@ class _ProbeRecorder:
                 break
             else:
                 self.sleep(self.poll)
-        self._seg += 1
-        self._log_progress()
+        if record:
+            self._seg += 1
+            self._log_progress()
 
     def _log_progress(self) -> None:
         now = self.monotonic()
@@ -372,24 +380,25 @@ def run_pitch_probe(
     *,
     hold: float = 0.8,
     settle: float = 0.6,
-    span: float = 45.0,
+    span: float = 70.0,
     abs_limit: float = 78.0,
     home_tol: float = 5.0,
     home_level: float = 0.5,
+    home_cap: int = 6,
     monotonic: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
     wait_cap: float = 2.0,
     poll: float = 0.002,
     blind_cap: float = 0.3,
 ) -> ProbeRun:
-    """pitch の角度ガード付きプローブ。
+    """pitch の角度ガード付きプローブ(水平 0° を中心に対称に振る)。
 
     時間ベース(look_schedule)だと速いレベルで ±80° クランプに張り付き、静特性が
-    黙って潰れる。そこでセグメント開始の pitch から ±span(絶対値では abs_limit)を
-    超えたら指令を切る。± を対で振れば各レベル後はほぼ元の角度に戻り、残りの
-    ドリフトはレベル間で開始時のホームへ戻して吸収する。+指令で pitch がどちらへ
-    動くかは仮定せず、応答の符号を実測してホーミングに使う。hold は片道の上限秒
-    (遅いレベルではガードに届かずこの時間で切れる)。
+    黙って潰れる。そこで各振りの前に HUD を見ながら水平(pitch≈0)へホーミングし、
+    そこから ±span(絶対値では abs_limit)を超えたら指令を切る。0 を中心に振るので
+    ±のクランプ余裕が等しく開始視線の傾きに依存せず、span を広く取れるぶん速い
+    レベルでも定常窓にサンプルが残る。+指令で pitch がどちらへ動くかは応答の符号を
+    実測する。hold は片道の上限秒(遅いレベルではガードに届かずこの時間で切れる)。
     """
     rec = _ProbeRecorder(
         reader,
@@ -400,41 +409,66 @@ def run_pitch_probe(
         poll=poll,
         blind_cap=blind_cap,
     )
-    home = rec.wait_first_pose().pitch_deg
+    rec.wait_first_pose()
 
     def cur_pitch() -> float:
-        return rec.latest.pitch_deg if rec.latest is not None else home
+        return rec.latest.pitch_deg if rec.latest is not None else 0.0
 
     def swing_guard(p0: float) -> Callable:
         return lambda p: abs(p.pitch_deg - p0) >= span or abs(p.pitch_deg) >= abs_limit
 
     sign = 0.0  # +指令で pitch が動く向き(応答から実測する)
-    try:
+
+    def learn_sign() -> None:
+        """+指令に対する pitch の動く向きを応答から実測する。"""
+        nonlocal sign
+        if sign != 0.0:
+            return
+        p0 = cur_pitch()
+        rec.run_segment(
+            send,
+            home_level,
+            hold,
+            stop_when=lambda p: abs(p.pitch_deg - p0) > 2.0
+            or abs(p.pitch_deg) >= abs_limit,
+            record=False,
+        )
+        if abs(cur_pitch() - p0) > 0.5:
+            sign = math.copysign(1.0, cur_pitch() - p0)
+
+    def home_to_level() -> None:
+        """HUD を見ながら水平(pitch≈0)へ寄せる。"""
+        learn_sign()
+        if sign == 0.0:
+            return  # 応答なし(動かない軸)
+        for _ in range(home_cap):
+            err = cur_pitch()
+            if abs(err) <= home_tol:
+                break
+            # 上を向きすぎ(err>0)なら下げる向きの指令
+            cmd = -math.copysign(home_level, err) * sign
+            rec.run_segment(
+                send,
+                cmd,
+                2 * hold,
+                stop_when=lambda p: abs(p.pitch_deg) <= home_tol
+                or abs(p.pitch_deg) >= abs_limit,
+                record=False,
+            )
+
+    def swing(v: float) -> None:
+        """水平へ寄せ、0 セトリング → v 振りを記録する。セトリングを v の直前に
+        置くと 0→v 遷移がホーミングの時間穴を挟まず連続し、むだ時間が正しく測れる。"""
+        home_to_level()
         rec.run_segment(send, 0.0, settle)
+        rec.run_segment(send, v, hold, stop_when=swing_guard(cur_pitch()))
+
+    try:
+        rec.run_segment(send, 0.0, settle, record=False)
         for n, v in enumerate(levels, 1):
             logger.info("probe pitch: level %+.2f (%d/%d)", v, n, len(levels))
-            n0 = len(rec.samples)
-            rec.run_segment(send, +v, hold, stop_when=swing_guard(cur_pitch()))
-            seg = rec.samples[n0:]
-            if len(seg) >= 2 and abs(seg[-1].pitch - seg[0].pitch) > 0.5:
-                sign = math.copysign(1.0, seg[-1].pitch - seg[0].pitch)
-            rec.run_segment(send, 0.0, settle)
-            rec.run_segment(send, -v, hold, stop_when=swing_guard(cur_pitch()))
-            rec.run_segment(send, 0.0, settle)
-            # ホーム帯へ戻してから次のレベルへ
-            cur = cur_pitch() - home
-            if abs(cur) > home_tol and sign != 0.0:
-                cmd = -sign * home_level if cur > 0 else sign * home_level
-                rec.run_segment(
-                    send,
-                    cmd,
-                    2 * hold,
-                    stop_when=lambda p: (
-                        abs(p.pitch_deg - home) <= home_tol
-                        or abs(p.pitch_deg) >= abs_limit
-                    ),
-                )
-                rec.run_segment(send, 0.0, settle)
+            swing(+v)
+            swing(-v)
     finally:
         send(0.0)
     return rec.result()
@@ -452,12 +486,6 @@ def freeze_gap(run: ProbeRun, factor: float = FREEZE_FACTOR) -> float | None:
     if len(dts) < 8:
         return None
     return factor * median(dts)
-
-
-def run_max_gap(run: ProbeRun) -> float:
-    """記録全体の最大サンプル間隔[s](プチフリ検出用)。"""
-    ts = [s.t for s in run.samples]
-    return max((b - a for a, b in pairwise(ts)), default=0.0)
 
 
 @dataclass(frozen=True)

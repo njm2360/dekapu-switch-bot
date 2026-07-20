@@ -2,8 +2,9 @@
 
 静特性の形は「不感帯 + 線形」なので全域を刻まず、折れ点を二分探索で絞り、
 線形域は少数レベルで傾きを取る。むだ時間は固定レベルの 0→v 遷移を多数回
-連射し、分布(中央値・ばらつき・最悪値)として測る。フリーズ(HUD 途絶)を
-検知したミニランは捨てて測り直す。
+連射し、分布(中央値・ばらつき・最悪値)として測る。フリーズ(HUD 途絶)で
+あるレベルの定常データが全滅したときだけ測り直す(部分的な汚染は同定側が
+セグメント単位で除外する)。
 
 プローブ本体と同じく PoseSource・送信コールバック・クロック抽象にしか依存
 しないので、SimulatedVRChat + SimClock でヘッドレスに検証できる。
@@ -34,13 +35,22 @@ from .identify import (
     look_schedule,
     move_anchor,
     run_axis_probe,
-    run_max_gap,
     run_move_probe,
     run_pitch_probe,
     segment_rates,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _clean_levels(run: ProbeRun, thr: float | None) -> set[float]:
+    """定常窓に thr 超のギャップを含まないセグメントの |cmd| 集合(thr=None なら全採用)。"""
+    rates, _ = segment_rates(run)
+    return {
+        round(abs(sr.cmd), 4)
+        for sr in rates
+        if sr.cmd != 0.0 and (thr is None or sr.max_gap <= thr)
+    }
 
 
 @dataclass(frozen=True)
@@ -62,7 +72,7 @@ class AdaptiveConfig:
     max_retries: int = 3  # フリーズ検知時の同一レベル測り直し回数
     freeze_factor: float = FREEZE_FACTOR
     max_travel: float = 3.0  # 移動軸プローブの往復範囲の片側幅[m]
-    pitch_span: float = 45.0  # pitch を開始視線から振る角度幅[°]
+    pitch_span: float = 70.0  # pitch を水平から振る角度幅[°](±80°クランプ手前まで)
 
 
 @dataclass
@@ -160,20 +170,24 @@ class AdaptiveAxisProbe:
             self._seg_base += max(s for s, _, _ in run.seg_starts) + 1
 
     def _measure(self, levels: list[float], *, passes: int = 1) -> ProbeRun:
-        """ミニランを実行する。フリーズ混入なら捨てて測り直す。"""
+        """ミニランを実行する。各レベルに定常セグメントが1つでも残れば採用し、
+        フリーズで全滅したレベルがあるときだけ測り直す(settle やホーム復帰の
+        途絶では捨てない)。"""
+        want = {round(abs(v), 4) for v in levels if v != 0.0}
         run = None
         for attempt in range(self.cfg.max_retries + 1):
             t_off = self.monotonic() - self._t0
             run = self._mini_run(levels, passes=passes)
             thr = freeze_gap(run, self.cfg.freeze_factor)
-            if thr is None or run_max_gap(run) <= thr:
+            if thr is None or not want or want <= _clean_levels(run, thr):
                 self._absorb(run, t_off)
                 return run
             self.freezes += 1
+            wiped = sorted(want - _clean_levels(run, thr))
             logger.warning(
-                "adaptive %s: freeze gap in levels %s (attempt %d/%d) -- re-measuring",
+                "adaptive %s: freeze wiped level(s) %s (attempt %d/%d) -- re-measuring",
                 self.axis,
-                [f"{v:.2f}" for v in levels],
+                [f"{v:.2f}" for v in wiped],
                 attempt + 1,
                 self.cfg.max_retries + 1,
             )

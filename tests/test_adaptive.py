@@ -7,7 +7,7 @@
 
 import pytest
 
-from app.sysid.adaptive import AdaptiveConfig, probe_axis_adaptive
+from app.sysid.adaptive import AdaptiveConfig, _clean_levels, probe_axis_adaptive
 from app.sysid.identify import (
     AxisModel,
     PlantModel,
@@ -15,6 +15,7 @@ from app.sysid.identify import (
     ProbeSample,
     build_plant,
     deadtime_samples,
+    freeze_gap,
     identify_axis,
 )
 from app.sysid.sim_plant import SimClock, SimulatedVRChat
@@ -30,6 +31,8 @@ YAW_CURVE = [
     (1.0, 90.0),
 ]
 MOVE_CURVE = [(-1.0, -2.0), (0.0, 0.0), (1.0, 2.0)]  # 不感帯なし
+# 不感帯 0.10 + 線形の pitch(実機に近い速さ。クランプ ±90° に届きうる)
+PITCH_CURVE = [(-1.0, -180.0), (-0.1, 0.0), (0.0, 0.0), (0.1, 0.0), (1.0, 180.0)]
 DEAD = 0.1
 DT = 0.05
 
@@ -111,14 +114,80 @@ def test_adaptive_deadtime_distribution():
     assert st["dropped"] == 0
 
 
-def test_adaptive_retries_on_freeze_and_stays_accurate():
-    # 0.3s のフリーズを約3秒ごとに注入
+def test_adaptive_no_wasteful_retry_under_sparse_freeze():
+    # 散発フリーズ(約3秒ごとに0.3s)。各レベルに定常セグメントが残るので測り直さない。
     seq = [0.3 if (i % 60) == 59 else DT for i in range(4000)]
     res = run_adaptive(make_plant(seq), "yaw", burst_n=20)
-    assert res.freezes >= 1  # フリーズを検知して測り直している
+    assert res.freezes == 0
     assert 0.50 <= res.model.onset <= 0.57
     assert res.model.rate(1.0) == pytest.approx(90.0, rel=0.1)
     assert res.deadtime_stats["median"] == pytest.approx(DEAD, abs=0.02)
+
+
+def test_adaptive_retries_when_freeze_wipes_a_level():
+    # 高頻度フリーズ(3フレームに1回)。レベルが全滅する回が出るので測り直しが走る。
+    seq = [0.3 if (i % 3) == 2 else DT for i in range(12000)]
+    res = run_adaptive(make_plant(seq), "yaw", burst_n=20)
+    assert res.freezes >= 1
+    assert 0.50 <= res.model.onset <= 0.57
+    assert res.model.rate(1.0) == pytest.approx(90.0, rel=0.1)
+
+
+def test_pitch_probe_homes_to_level_from_off_level_start():
+    # 上を向いた(+35°)状態からでも HUD ホーミングで水平中心に振れ、線形・左右対称に
+    # 復元される。むだ時間 15ms なら guard(±70°)のオーバーシュートは ~3° で ±80° に届かない。
+    plant = PlantModel(
+        axes={"pitch": AxisModel("pitch", "deg/s", PITCH_CURVE, 0.015)},
+        dt_mean=0.017,
+    )
+    sim = SimulatedVRChat(plant, use_dt_seq=False, pitch=35.0)
+    clk = SimClock(sim)
+    res = probe_axis_adaptive(
+        sim,
+        lambda v: sim.look(pitch=v),
+        "pitch",
+        monotonic=clk.monotonic,
+        sleep=clk.sleep,
+        cfg=AdaptiveConfig(burst_n=12),
+    )
+    m = res.model
+    assert m.onset == pytest.approx(0.10, abs=0.03)
+    # 高指令まで線形・左右対称(クランプ張り付きがない)
+    assert m.rate(1.0) == pytest.approx(180.0, rel=0.1)
+    assert m.rate(-1.0) == pytest.approx(-180.0, rel=0.1)
+    assert m.rate(0.8) == pytest.approx(-m.rate(-0.8), rel=0.1)
+    # 記録は水平を中心に上下対称に振れている(片側クランプなら偏る)
+    pitches = [s.pitch for s in res.run.samples]
+    assert max(pitches) > 40.0 and min(pitches) < -40.0
+    assert abs(max(pitches) + min(pitches)) < 30.0
+    assert max(abs(p) for p in pitches) < 79.5  # クランプに張り付いていない
+
+
+def test_clean_levels_keeps_partially_frozen_level():
+    # 同じ指令レベルにクリーンな定常セグメントとフリーズ入りセグメントが1つずつ。
+    # 1つでもクリーンなら測り直し対象にしない。
+    dt = 0.017
+    samples = _steady_samples(0, 0.5, 0.0, 10.0, 40, dt)
+    samples += _steady_samples(1, 0.5, 1.0, 10.0, 40, dt, gap_at=30, gap=0.2)
+    run = ProbeRun(
+        axis="yaw", samples=samples, seg_starts=[(0, 0.5, 0.0), (1, 0.5, 1.0)]
+    )
+    assert 0.5 in _clean_levels(run, freeze_gap(run))
+
+
+def test_clean_levels_flags_fully_wiped_level():
+    # あるレベルの唯一の定常セグメントがフリーズ入り → クリーン集合から外れる。
+    dt = 0.017
+    samples = _steady_samples(0, 0.5, 0.0, 10.0, 40, dt)  # クリーンな 0.5
+    samples += _steady_samples(
+        1, 0.3, 1.0, 6.0, 40, dt, gap_at=30, gap=0.2
+    )  # フリーズ入り 0.3
+    run = ProbeRun(
+        axis="yaw", samples=samples, seg_starts=[(0, 0.5, 0.0), (1, 0.3, 1.0)]
+    )
+    clean = _clean_levels(run, freeze_gap(run))
+    assert 0.5 in clean
+    assert 0.3 not in clean
 
 
 def test_build_plant_carries_deadtime_stats():

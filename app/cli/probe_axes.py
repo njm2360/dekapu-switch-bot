@@ -139,7 +139,10 @@ def _run_live(axes: list[str], out_dir: Path, args) -> None:
                 "forward/back and left/right (relative to facing)."
             )
         if "pitch" in axes:
-            print(f"[warn] pitch sweeps ±{args.pitch_span:.0f}° from the current view.")
+            print(
+                f"[warn] pitch homes to level via HUD, then sweeps ±"
+                f"{args.pitch_span:.0f}° around the horizon (start view need not be level)."
+            )
         print(f"starting in {args.start_delay:.0f}s...")
         time.sleep(args.start_delay)
         for axis in axes:
@@ -208,8 +211,8 @@ def main() -> None:
     parser.add_argument(
         "--pitch-span",
         type=float,
-        default=45.0,
-        help="pitch を開始視線から振る角度幅[°](±80°クランプ回避のガード)",
+        default=70.0,
+        help="pitch を水平から振る角度幅[°](±80°クランプ回避のガード)",
     )
     parser.add_argument(
         "--max-travel",
