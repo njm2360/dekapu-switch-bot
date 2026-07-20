@@ -29,6 +29,7 @@ from .maneuvers import (
     strafe_align,
     turn_to,
 )
+from .osc import VRChatOSC
 from .recording import NullRecorder, Recorder
 
 logger = logging.getLogger(__name__)
@@ -86,8 +87,6 @@ class Pilot:
         gains: PatrolGains | None = None,
         world_cal: WorldCalibration | str | None = None,
         recorder: Recorder | None = None,
-        osc=None,
-        owns_io: bool = False,
     ):
         """各アクチュエータと reader を直接渡す注入版(実機 I/O 込みは connect())。
 
@@ -113,8 +112,8 @@ class Pilot:
             for note in applied.notes:
                 logger.warning("world_cal: %s", note)
         self.recorder = recorder or NullRecorder()
-        self._osc = osc
-        self._owns_io = owns_io
+        self._osc: VRChatOSC | None = None
+        self._owns_io = False
         self._cancel = threading.Event()
         self.nav = nav_controllers(self.gains)
         self.face = face_controllers(self.gains)
@@ -126,6 +125,7 @@ class Pilot:
         cls,
         grid: NavGrid,
         *,
+        osc: VRChatOSC | None = None,
         gains: PatrolGains | None = None,
         world_cal: WorldCalibration | str | None = None,
         look: LookActuator | None = None,
@@ -134,18 +134,18 @@ class Pilot:
     ) -> Pilot:
         """実機 I/O(キャプチャ+OSC)を組んだ Pilot を作る(注入版は __init__)。
 
-        look / interact を渡すと視点・押下だけ差し替えられる。省略時はどちらも OSC。
+        osc を渡すと host/port を変えられる(省略時は 127.0.0.1:9000)。
+        look / interact を渡すと視点・押下だけ差し替えられる。省略時はどれも OSC。
         world_cal は calibrate-world の JSON パス(またはロード済み WorldCalibration)。
         """
         from ..perception.capture import WindowsVRChatCapture
         from ..perception.reader import PoseReader
-        from .osc import VRChatOSC
 
         reader = PoseReader(source=WindowsVRChatCapture()).start()
-        osc = VRChatOSC()
+        osc = osc or VRChatOSC()
         osc.hud_enable(True)
         osc.set_run(True)
-        return cls(
+        pilot = cls(
             grid,
             reader,
             look or osc,
@@ -154,9 +154,10 @@ class Pilot:
             gains=gains,
             world_cal=world_cal,
             recorder=recorder,
-            osc=osc,
-            owns_io=True,
         )
+        pilot._osc = osc
+        pilot._owns_io = True
+        return pilot
 
     # ---- 状態クエリ(sense) --------------------------------------------
     @staticmethod
