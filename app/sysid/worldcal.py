@@ -23,7 +23,7 @@ _STALL_MARGIN = 1.2
 # ゲイン調整時の基準値。再同定したら deadzone 定数と同様にここも更新する
 # (gain-tuning.md「再同定後の再検証チェックリスト」)
 REF_SPEED = {"forward": 6.0, "strafe": 3.0}  # cmd=1 の速度 [m/s]
-REF_DEADTIME_S = {"forward": 0.017, "strafe": 0.017}
+REF_DEADTIME_S = {"forward": 0.016, "strafe": 0.030}
 
 
 @dataclass(frozen=True)
