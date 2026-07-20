@@ -6,7 +6,7 @@
 マウスクリックか)を使うかは呼び出し側が渡す。
 
 osc.VRChatOSC は全プロトコルをそのまま満たす(OSC 経由ならアダプタ不要)。
-HUD 表示切替は OSC 固有の操作なのでここには含めない(osc.VRChatOSC.hud_enable を使う)。
+HUD 表示切替はここに含めない(spec.HUD_ENABLE_PARAM を avatar_param で送る)。
 """
 
 from typing import Protocol, runtime_checkable

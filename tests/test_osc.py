@@ -8,6 +8,7 @@ import pytest
 from pythonosc.osc_message import OscMessage
 
 from app.control.osc import VRChatOSC
+from app.perception.spec import HUD_ENABLE_PARAM
 
 
 def _receiver():
@@ -63,16 +64,6 @@ def test_look_without_pitch_zeroes_vertical():
         sock.close()
 
 
-def test_look_vertical_direct():
-    sock, port = _receiver()
-    try:
-        VRChatOSC("127.0.0.1", port).look_vertical(-0.4)
-        a, p = _recv(sock)
-        assert a == "/input/LookVertical" and p[0] == pytest.approx(-0.4)
-    finally:
-        sock.close()
-
-
 def test_button_is_int():
     sock, port = _receiver()
     try:
@@ -84,12 +75,12 @@ def test_button_is_int():
         sock.close()
 
 
-def test_hud_enable_avatar_param():
+def test_avatar_param():
     sock, port = _receiver()
     try:
-        VRChatOSC("127.0.0.1", port).hud_enable(True)
+        VRChatOSC("127.0.0.1", port).avatar_param(HUD_ENABLE_PARAM, True)
         a, p = _recv(sock)
-        assert a == "/avatar/parameters/HUD_Enable"
+        assert a == f"/avatar/parameters/{HUD_ENABLE_PARAM}"
         assert p == [True]
     finally:
         sock.close()

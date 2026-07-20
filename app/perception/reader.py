@@ -11,6 +11,7 @@ import numpy as np
 from ..core.pose import Pose
 from .capture import FrameSource
 from .decode import DecodeResult, DecodeStatus, decode_frame
+from .spec import HUD_ENABLE_PARAM
 
 logger = logging.getLogger(__name__)
 
@@ -205,9 +206,10 @@ class PoseReader:
             self._warned = True
             logger.warning(
                 "no valid HUD for %d consecutive frames (last=%s). "
-                "menu open? HUD_Enable=false? wrong window?",
+                "menu open? %s=false? wrong window?",
                 self.stats.consecutive_fail,
                 detail or self.stats.last_status,
+                HUD_ENABLE_PARAM,
             )
 
     def _update_fps(self) -> None:

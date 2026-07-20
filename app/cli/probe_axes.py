@@ -113,6 +113,7 @@ def _print_adaptive(res: AdaptiveResult) -> None:
 def _run_live(axes: list[str], out_dir: Path, args) -> None:
     from app.control.osc import VRChatOSC
     from app.perception.reader import PoseReader
+    from app.perception.spec import HUD_ENABLE_PARAM
 
     reader = PoseReader().start()
     osc = VRChatOSC(host=args.host, port=args.port)
@@ -124,13 +125,13 @@ def _run_live(axes: list[str], out_dir: Path, args) -> None:
     )
     results: list[AdaptiveResult] = []
     try:
-        osc.hud_enable(True)
+        osc.avatar_param(HUD_ENABLE_PARAM, True)
         osc.set_run(True)
         deadline = time.monotonic() + 10.0
         while reader.get_latest() is None:
             if time.monotonic() > deadline:
                 raise SystemExit(
-                    "cannot read HUD (VRChat running? HUD_Enable=true? wrong window?)"
+                    f"cannot read HUD (VRChat running? {HUD_ENABLE_PARAM}=true? wrong window?)"
                 )
             time.sleep(0.1)
         if any(a in ("forward", "strafe") for a in axes):

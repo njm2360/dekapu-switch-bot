@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from ..core.pose import Pose
 from ..perception.capture import WindowFocus
 from ..perception.reader import ReaderStats
+from ..perception.spec import HUD_ENABLE_PARAM
 from ..spatial.navigation import NavGrid, Path, plan_path
 from ..sysid.worldcal import WorldCalibration
 from .actuator import InteractActuator, LookActuator, MoveActuator
@@ -147,7 +148,7 @@ class Pilot:
         capture = WindowsVRChatCapture()
         reader = PoseReader(source=capture).start()
         osc = osc or VRChatOSC()
-        osc.hud_enable(True)
+        osc.avatar_param(HUD_ENABLE_PARAM, True)
         osc.set_run(True)
         try:
             pilot = cls(
@@ -252,7 +253,9 @@ class Pilot:
                 return True
             time.sleep(0.1)
         logger.warning(
-            "no HUD for %.0fs (VRChat running? HUD_Enable=true? wrong window?)", timeout
+            "no HUD for %.0fs (VRChat running? %s=true? wrong window?)",
+            timeout,
+            HUD_ENABLE_PARAM,
         )
         return False
 

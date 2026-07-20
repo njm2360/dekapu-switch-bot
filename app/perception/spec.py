@@ -1,6 +1,9 @@
 # HUD ビットグリッドのプロトコル定数
 MAGIC = 0x5AC3E7A1
 
+# HUD有効化: Parameter名
+HUD_ENABLE_PARAM = "PixelHUDEnable"
+
 # ワード配列(uint32[12])のレイアウト
 IDX_MAGIC = 0
 IDX_TIME = 1
