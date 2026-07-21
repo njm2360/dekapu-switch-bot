@@ -13,7 +13,7 @@
 
 ## 最小ハーネス
 
-`SimulatedVRChat` が reader/look/move の3役を兼ねる。`SimClock` を渡すと仮想時間で回るので実時間よりずっと速い。実例は tests/test_sysid.py と app/cli/sim_face.py。
+`SimulatedVRChat` が reader/look/move の3役を兼ねる。`SimClock` を渡すと仮想時間で回るので実時間よりずっと速い。実例は tests/test_sysid.py の `test_all_control_loops_run_against_sim`。
 
 ```python
 from app.control.controller import PatrolGains, nav_controllers

@@ -1,16 +1,14 @@
 """同定プラント(plant.json)上で巡回制御ループの安定余裕を出す解析 CLI
 
 各ループ(face/nav/translate/align)の ωc/PM/GM/むだ時間余裕を表にし、任意で
-ボード線図PNGを保存する。ゲインは patrol-buttons / sim-face と同じフラグで上書きできる
+ボード線図PNGを保存する。ゲインは PatrolGains の既定値を使う
 """
 
 import argparse
-import dataclasses
 import math
 from pathlib import Path
 
 from app.cli._logging import setup_logging
-from app.cli.patrol_buttons import _add_gain_args
 from app.control.controller import PatrolGains
 from app.control.loop_analysis import analyze_patrol, save_bode_png
 from app.sysid.identify import PlantModel
@@ -23,12 +21,9 @@ def main() -> None:
     )
     parser.add_argument("--model", required=True, help="probe-axesが出力したplant.json")
     parser.add_argument("--out", default=None, help="ボード線図PNGの出力先(任意)")
-    _add_gain_args(parser)
     args = parser.parse_args()
 
-    gains = PatrolGains(
-        **{f.name: getattr(args, f.name) for f in dataclasses.fields(PatrolGains)}
-    )
+    gains = PatrolGains()
     plant = PlantModel.load(args.model)
 
     print(f"model: {args.model}  (dt {plant.dt_mean * 1000:.1f} ms)")

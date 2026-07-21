@@ -17,10 +17,8 @@ dependencies = [
 decode-demo = "app.cli.decode_demo:main"
 map-room = "app.cli.map_room:main"
 find-button = "app.cli.find_button:main"
-patrol-buttons = "app.cli.patrol_buttons:main"
 probe-axes = "app.cli.probe_axes:main"
 calibrate-world = "app.cli.calibrate_world:main"
-sim-face = "app.cli.sim_face:main"
 bode-margins = "app.cli.bode_margins:main"
 log-video = "app.cli.log_video:main"
 

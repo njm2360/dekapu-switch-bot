@@ -1,7 +1,5 @@
 # アーキテクチャ概要
 
-VRChat 自動化のデータフローと、それを実装する `app` パッケージ / CLI の対応。
-
 ## パイプライン
 
 ```txt
@@ -28,8 +26,6 @@ VRChat 画面(HUDビットグリッド)
                           ├─ OSC:         VRChatOSC ──► /input/* を注入
                           └─ DirectInput: MouseLookActuator ──► 相対マウス(視点のみ)
 ```
-
-制御ループ(patrol)はアクチュエータ(look / move)と制御器(AxisController)を注入で受け取る。視点だけ OSC からマウスに差し替える、といった部品単位の入れ替えができる。HUD 表示切替はアクチュエータではなく OSC 固有操作(`VRChatOSC.hud_enable`)。
 
 ## モジュール(`app/`)
 
@@ -85,15 +81,13 @@ VRChat 画面(HUDビットグリッド)
 | `sysid/identify.py`  | システム同定(プローブ注入・静特性/むだ時間/dt 抽出・`PlantModel` JSON)                 |
 | `sysid/sim_plant.py` | `SimulatedVRChat`(同定モデルを積分。PoseSource+両 Actuator を満たし制御ループに注入可) |
 
-## CLI(`app/cli/`, console scripts)
+## CLI
 
-| コマンド         | スクリプト              | 用途                                                              |
-| ---------------- | ----------------------- | ----------------------------------------------------------------- |
-| `decode-demo`    | `cli/decode_demo.py`    | HUD を読み取り 6DoF を表示(動作確認)                              |
-| `map-room`       | `cli/map_room.py`       | 壁沿いに歩いて部屋マップを記録(SPACE一時停止・日時フォルダ出力)   |
-| `find-button`    | `cli/find_button.py`    | 複数地点からボタンを三角測量(SPACE/r/q)                           |
-| `patrol-buttons` | `cli/patrol_buttons.py` | マップ上でボタンを壁を避けて巡回(OSC + PID)                       |
-| `probe-axes`     | `cli/probe_axes.py`     | 入力軸の応答特性を測定し `plant.json` に同定(--from-log で再同定) |
-| `sim-face`       | `cli/sim_face.py`       | 同定プラント上で正対ループを回しゲインを検証(実機不要)            |
-| `bode-margins`   | `cli/bode_margins.py`   | 同定プラント上で全ループの安定余裕とボード線図を出す(実機不要)    |
-| `log-video`      | `cli/log_video.py`      | 制御ログCSVを一人称3D+2D地図の動画に再生(目視確認用)              |
+| コマンド       | スクリプト            | 用途                                                              |
+| -------------- | --------------------- | ----------------------------------------------------------------- |
+| `decode-demo`  | `cli/decode_demo.py`  | HUD を読み取り 6DoF を表示(動作確認)                              |
+| `map-room`     | `cli/map_room.py`     | 壁沿いに歩いて部屋マップを記録(SPACE一時停止・日時フォルダ出力)   |
+| `find-button`  | `cli/find_button.py`  | 複数地点からボタンを三角測量(SPACE/r/q)                           |
+| `probe-axes`   | `cli/probe_axes.py`   | 入力軸の応答特性を測定し `plant.json` に同定(--from-log で再同定) |
+| `bode-margins` | `cli/bode_margins.py` | 同定プラント上で全ループの安定余裕とボード線図を出す(実機不要)    |
+| `log-video`    | `cli/log_video.py`    | 制御ログCSVを一人称3D+2D地図の動画に再生(目視確認用)              |
