@@ -87,7 +87,7 @@ def load_frames(path: Path) -> dict[str, np.ndarray]:
     out = {k: np.array([num(r[k]) for r in rows]) for k in NEED}
     for k in OPTIONAL:
         out[k] = np.array([num(r.get(k)) for r in rows])
-    for k in ("phase", "target"):
+    for k in ("phase",):
         out[k] = np.array([r.get(k) or "" for r in rows], dtype=object)
     # 多フェーズ連結ログ(実機の patrol 等)は t がフェーズ相対で巻き戻るので、
     # 巻き戻り箇所を dt 列(なければ中央値ステップ)で埋めて単調時間に変換する
@@ -450,8 +450,7 @@ def draw_hud(frame: np.ndarray, d: dict, idx: int, hud_h: int) -> np.ndarray:
     dr.text((tx0 + 88, 6), phase or "?", fill=PHASE_COLOR.get(phase, (200, 200, 200)))
     dr.text(
         (tx0 + 136, 6),
-        f"{d['target'][idx]}{f' wp{int(wp)}' if math.isfinite(wp) else ''}"
-        f"  dt={f(dt_ms, '.0f')}ms",
+        f"{f'wp{int(wp)}  ' if math.isfinite(wp) else ''}dt={f(dt_ms, '.0f')}ms",
         fill=(
             (220, 60, 60) if (math.isfinite(dt_ms) and dt_ms > 50) else (170, 170, 170)
         ),

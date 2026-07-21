@@ -16,7 +16,6 @@ from typing import Protocol
 class ControlRow:
     t: float  # 開始からの経過秒
     phase: str  # nav / translate / face / turn / align
-    target: str = ""  # ターゲット名
     wp: int | None = None  # 追従中のウェイポイント番号(nav/translate)
     dt: float | None = None  # 前フレームからの実経過秒
     x: float | None = None

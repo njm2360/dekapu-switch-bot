@@ -21,7 +21,7 @@ VRChat 画面(HUDビットグリッド)
     └─► [navigation]  NavGrid + plan_path ──► 壁を避けた経路
                           │
                           ▼
-                     [pilot / maneuvers] goto / aim / patrol(フェーズ連結と制御ループ)
+                     [pilot / maneuvers] goto / aim / activate(フェーズ連結と制御ループ)
                           │  [guidance] で誤差を計算し、[controller] AxisController(PID) が指令[-1,1] に変換
                           ▼
                      [actuator]  LookActuator / MoveActuator

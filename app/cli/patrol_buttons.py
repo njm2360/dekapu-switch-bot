@@ -107,7 +107,7 @@ def _run_live(grid, targets, args, gains: PatrolGains) -> None:
         try:
             for name, tgt_xz, tgt_y, face_yaw in targets:
                 print(f"-> {name} {tgt_xz} y={tgt_y} face_yaw={face_yaw:g}")
-                pilot.approach((tgt_xz[0], tgt_y, tgt_xz[1]), face_yaw, name=name)
+                pilot.approach((tgt_xz[0], tgt_y, tgt_xz[1]), face_yaw)
             print("patrol done.")
         except KeyboardInterrupt:
             print("\ninterrupted.")

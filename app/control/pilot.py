@@ -411,7 +411,6 @@ class Pilot:
         self,
         xz: tuple[float, float],
         *,
-        name: str = "goto",
         pitch_at: tuple[float, float, float] | None = None,
     ) -> NavResult:
         """xz へ経路計画して移動する(壁回避あり。視点は進行方向へ向く)。
@@ -420,16 +419,15 @@ class Pilot:
         """
         pose = self.reader.get_latest()
         if pose is None:
-            logger.warning("[%s] no current pose (HUD?)", name)
+            logger.warning("[goto] no current pose (HUD?)")
             return NavResult(False, False, "no_pose", None, 0.0, 0)
         start = (pose.position[0], pose.position[2])
         path = plan_path(self.grid, start, xz)
         if path is None:
-            logger.warning("[%s] no path (unreachable)", name)
+            logger.warning("[goto] no path (unreachable)")
             return NavResult(False, False, "unreachable", None, 0.0, 0)
         logger.info(
-            "[%s] path %dwp / %.1fm%s",
-            name,
+            "[goto] path %dwp / %.1fm%s",
             len(path.waypoints),
             path.length,
             " (goal on wall -> nearest floor)" if path.goal_blocked else "",
@@ -444,7 +442,6 @@ class Pilot:
             pitch_target=pitch_at,
             recorder=self.recorder,
             cancel=self._cancel,
-            name=name,
         )
         res.path = path
         return res
@@ -453,7 +450,6 @@ class Pilot:
         self,
         xz: tuple[float, float],
         *,
-        name: str = "translate",
         pitch_at: tuple[float, float, float] | None = None,
     ) -> NavResult:
         """視点を回さず xz へ並進する(壁回避は goto と同じ plan_path)。
@@ -463,16 +459,15 @@ class Pilot:
         """
         pose = self.reader.get_latest()
         if pose is None:
-            logger.warning("[%s] no current pose (HUD?)", name)
+            logger.warning("[translate] no current pose (HUD?)")
             return NavResult(False, False, "no_pose", None, 0.0, 0)
         start = (pose.position[0], pose.position[2])
         path = plan_path(self.grid, start, xz)
         if path is None:
-            logger.warning("[%s] no path (unreachable)", name)
+            logger.warning("[translate] no path (unreachable)")
             return NavResult(False, False, "unreachable", None, 0.0, 0)
         logger.info(
-            "[%s] path %dwp / %.1fm (view locked)%s",
-            name,
+            "[translate] path %dwp / %.1fm (view locked)%s",
             len(path.waypoints),
             path.length,
             " (goal on wall -> nearest floor)" if path.goal_blocked else "",
@@ -487,7 +482,6 @@ class Pilot:
             pitch_target=pitch_at,
             recorder=self.recorder,
             cancel=self._cancel,
-            name=name,
         )
         res.path = path
         return res
@@ -496,7 +490,6 @@ class Pilot:
         self,
         waypoints: Iterable[tuple[float, float]],
         *,
-        name: str = "follow",
         pitch_at: tuple[float, float, float] | None = None,
     ) -> NavResult:
         """与えた waypoints をそのまま追従する(経路計画なし。goto の低レベル版)。
@@ -513,10 +506,9 @@ class Pilot:
             pitch_target=pitch_at,
             recorder=self.recorder,
             cancel=self._cancel,
-            name=name,
         )
 
-    def aim(self, xyz: tuple[float, float, float], *, name: str = "aim") -> AimResult:
+    def aim(self, xyz: tuple[float, float, float]) -> AimResult:
         """target(x,y,z)へ視点(yaw/pitch)を向ける(体は動かさない)。"""
         return aim_at(
             self.reader,
@@ -526,12 +518,9 @@ class Pilot:
             self.face,
             recorder=self.recorder,
             cancel=self._cancel,
-            name=name,
         )
 
-    def align(
-        self, xyz: tuple[float, float, float], *, name: str = "align"
-    ) -> AimResult:
+    def align(self, xyz: tuple[float, float, float]) -> AimResult:
         """視点は回さず、体の横移動で target への横ずれを詰める(最終照準)。"""
         return strafe_align(
             self.reader,
@@ -543,12 +532,9 @@ class Pilot:
             self.strafe,
             recorder=self.recorder,
             cancel=self._cancel,
-            name=name,
         )
 
-    def turn_to(
-        self, yaw_deg: float, pitch_deg: float | None = None, *, name: str = "turn"
-    ) -> AimResult:
+    def turn_to(self, yaw_deg: float, pitch_deg: float | None = None) -> AimResult:
         """指定した yaw(必要なら pitch)へ視点だけ回す(座標でなく角度で指定)。"""
         return turn_to(
             self.reader,
@@ -559,7 +545,6 @@ class Pilot:
             pitch_deg=pitch_deg,
             recorder=self.recorder,
             cancel=self._cancel,
-            name=name,
         )
 
     # ---- 開ループ操作 --------------------------------------------------
@@ -607,21 +592,19 @@ class Pilot:
         self._require_interact().click()
 
     # ---- 複合(移動+照準+押下) ---------------------------------------
-    def _aim_sequence(self, xyz: tuple[float, float, float], name: str) -> AimResult:
+    def _aim_sequence(self, xyz: tuple[float, float, float]) -> AimResult:
         """aim → (align_tol > 0 なら)align の照準シーケンス。"""
-        aim = self.aim(xyz, name=name)
+        aim = self.aim(xyz)
         logger.info(
-            "[%s] aim yaw_err=%+.2f° pitch_err=%+.2f° (%s)",
-            name,
+            "[aim] yaw_err=%+.2f° pitch_err=%+.2f° (%s)",
             aim.yaw_err,
             aim.pitch_err,
             aim.reason,
         )
         if self.gains.align_tol > 0.0:
-            aim = self.align(xyz, name=name)
+            aim = self.align(xyz)
             logger.info(
-                "[%s] align yaw_err=%+.2f° pitch_err=%+.2f° (%s)",
-                name,
+                "[align] yaw_err=%+.2f° pitch_err=%+.2f° (%s)",
                 aim.yaw_err,
                 aim.pitch_err,
                 aim.reason,
@@ -633,26 +616,21 @@ class Pilot:
         xyz: tuple[float, float, float],
         face_yaw_deg: float,
         *,
-        name: str = "button",
         standoff: float | None = None,
     ) -> tuple[NavResult, AimResult | None]:
         """正面へ移動して照準するだけ(押さない)。押下まで一括なら activate()。
 
-        pitch_at((x,y,z))を渡すと、移動中にpitchを先合わせする。
+        移動中に xyz へ pitch を先合わせするので、到着後の照準は主に yaw で済む。
         """
-        nav = self.goto(
-            self.standoff_point(xyz, face_yaw_deg, standoff), name=name, pitch_at=xyz
-        )
+        nav = self.goto(self.standoff_point(xyz, face_yaw_deg, standoff), pitch_at=xyz)
         if not nav.path_found:
             return nav, None
-        return nav, self._aim_sequence(xyz, name)
+        return nav, self._aim_sequence(xyz)
 
-    def click_at(
-        self, xyz: tuple[float, float, float], *, name: str = "click_at"
-    ) -> ClickAtResult:
+    def click_at(self, xyz: tuple[float, float, float]) -> ClickAtResult:
         """その場で照準(aim/align)し、収束したら click する(移動しない)。"""
         self._require_interact()
-        aim = self._aim_sequence(xyz, name)
+        aim = self._aim_sequence(xyz)
         if not aim.converged:
             return ClickAtResult(aim, False)
         self.click()
@@ -663,29 +641,15 @@ class Pilot:
         xyz: tuple[float, float, float],
         face_yaw_deg: float,
         *,
-        name: str = "button",
         standoff: float | None = None,
     ) -> ActivateResult:
         """正面へ移動 → 照準 → 押下 の一連(ボタン1個を押し切る最上位API)。"""
         self._require_interact()
-        nav, aim = self.approach(xyz, face_yaw_deg, name=name, standoff=standoff)
+        nav, aim = self.approach(xyz, face_yaw_deg, standoff=standoff)
         if aim is None or not aim.converged:
             return ActivateResult(nav, aim, False)
         self.click()
         return ActivateResult(nav, aim, True)
-
-    def patrol(
-        self,
-        targets: Iterable[tuple[str, tuple[float, float, float], float]],
-    ) -> list[tuple[str, NavResult, AimResult | None]]:
-        """(name, xyz, face_yaw) の並びを順に approach する(cancel() で途中終了)。"""
-        results = []
-        for name, xyz, face_yaw in targets:
-            if self.cancelled:
-                break
-            nav, aim = self.approach(xyz, face_yaw, name=name)
-            results.append((name, nav, aim))
-        return results
 
     # ---- ライフサイクル ------------------------------------------------
     def close(self) -> None:

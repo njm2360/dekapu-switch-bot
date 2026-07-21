@@ -161,7 +161,6 @@ def follow_path(
     clock: Clock = time,
     recorder: Recorder | None = None,
     cancel: threading.Event | None = None,
-    name: str = "",
 ) -> NavResult:
     rec = recorder or NullRecorder()
     track = not isinstance(rec, NullRecorder)
@@ -185,12 +184,12 @@ def follow_path(
         while True:
             if cancel is not None and cancel.is_set():
                 reason = "cancelled"
-                logger.info("[%s] nav cancelled", name)
+                logger.info("[nav] cancelled")
                 break
             pose, dt, now = _next_frame(reader, last_t, last_time, clock=clock)
             if pose is None:
                 reason = "hud_lost"
-                logger.warning("[%s] HUD lost, abort nav", name)
+                logger.warning("[nav] HUD lost, abort")
                 break
             last_t, last_time = pose.time_ms, now
             frames += 1
@@ -225,7 +224,6 @@ def follow_path(
                     ControlRow(
                         t=now - t0,
                         phase="nav",
-                        target=name,
                         wp=seg + 1,
                         dt=dt,
                         x=pose.position[0],
@@ -255,7 +253,7 @@ def follow_path(
                     pitch_acc.update(pitch_err, pitch_cmd, now - t0, dt, gains.face_tol)
             if now - t0 > gains.nav_timeout:
                 reason = "timeout"
-                logger.warning("[%s] nav timeout", name)
+                logger.warning("[nav] timeout")
                 break
     finally:
         # 中断時も必ず停止
@@ -263,8 +261,7 @@ def follow_path(
         move.stop()
     elapsed = clock.monotonic() - t0
     logger.debug(
-        "[%s] nav end: %s wp=%d/%d frames=%d %.2fs",
-        name,
+        "[nav] end: %s wp=%d/%d frames=%d %.2fs",
         reason,
         seg + 1,
         len(wps),
@@ -295,7 +292,6 @@ def follow_path_translate(
     clock: Clock = time,
     recorder: Recorder | None = None,
     cancel: threading.Event | None = None,
-    name: str = "",
 ) -> NavResult:
     rec = recorder or NullRecorder()
     track = not isinstance(rec, NullRecorder)
@@ -316,12 +312,12 @@ def follow_path_translate(
         while idx < len(wps):
             if cancel is not None and cancel.is_set():
                 reason = "cancelled"
-                logger.info("[%s] translate cancelled", name)
+                logger.info("[translate] cancelled")
                 break
             pose, dt, now = _next_frame(reader, last_t, last_time, clock=clock)
             if pose is None:
                 reason = "hud_lost"
-                logger.warning("[%s] HUD lost, abort translate", name)
+                logger.warning("[translate] HUD lost, abort")
                 break
             last_t, last_time = pose.time_ms, now
             frames += 1
@@ -366,7 +362,6 @@ def follow_path_translate(
                     ControlRow(
                         t=now - t0,
                         phase="translate",
-                        target=name,
                         wp=idx,
                         dt=dt,
                         x=pose.position[0],
@@ -392,7 +387,7 @@ def follow_path_translate(
                     pitch_acc.update(pitch_err, pitch_cmd, now - t0, dt, gains.face_tol)
             if now - t0 > gains.nav_timeout:
                 reason = "timeout"
-                logger.warning("[%s] translate timeout", name)
+                logger.warning("[translate] timeout")
                 break
     finally:
         # 中断時も必ず停止
@@ -400,8 +395,7 @@ def follow_path_translate(
         look.stop()
     elapsed = clock.monotonic() - t0
     logger.debug(
-        "[%s] translate end: %s wp=%d/%d frames=%d %.2fs",
-        name,
+        "[translate] end: %s wp=%d/%d frames=%d %.2fs",
         reason,
         idx,
         len(wps),
@@ -432,7 +426,6 @@ def _face_loop(
     clock: Clock,
     recorder: Recorder | None,
     cancel: threading.Event | None,
-    name: str,
 ) -> AimResult:
     """正対系ループの共通コア。errors(pose) が (yaw誤差, pitch誤差)[deg] を返す。
 
@@ -484,7 +477,6 @@ def _face_loop(
                     ControlRow(
                         t=now - t0,
                         phase=phase,
-                        target=name,
                         dt=dt,
                         x=pose.position[0],
                         y=pose.position[1],
@@ -512,8 +504,7 @@ def _face_loop(
         look.stop()
     elapsed = clock.monotonic() - t0
     logger.debug(
-        "[%s] %s end: %s yaw_err=%+.2f pitch_err=%+.2f frames=%d %.2fs",
-        name,
+        "[%s] end: %s yaw_err=%+.2f pitch_err=%+.2f frames=%d %.2fs",
         phase,
         reason,
         yaw_err,
@@ -545,7 +536,6 @@ def strafe_align(
     clock: Clock = time,
     recorder: Recorder | None = None,
     cancel: threading.Event | None = None,
-    name: str = "",
 ) -> AimResult:
     """最終照準: 視点(yaw)は回さず、体の横移動で誤差を潰す。
 
@@ -624,7 +614,6 @@ def strafe_align(
                     ControlRow(
                         t=now - t0,
                         phase="align",
-                        target=name,
                         dt=dt,
                         x=pose.position[0],
                         y=pose.position[1],
@@ -656,8 +645,7 @@ def strafe_align(
         look.stop()
     elapsed = clock.monotonic() - t0
     logger.debug(
-        "[%s] align end: %s yaw_err=%+.2f pitch_err=%+.2f frames=%d %.2fs",
-        name,
+        "[align] end: %s yaw_err=%+.2f pitch_err=%+.2f frames=%d %.2fs",
         reason,
         yaw_err,
         pitch_err,
@@ -686,7 +674,6 @@ def aim_at(
     clock: Clock = time,
     recorder: Recorder | None = None,
     cancel: threading.Event | None = None,
-    name: str = "",
 ) -> AimResult:
     tgt_xz = (target_xyz[0], target_xyz[2])
 
@@ -707,7 +694,6 @@ def aim_at(
         clock=clock,
         recorder=recorder,
         cancel=cancel,
-        name=name,
     )
 
 
@@ -722,7 +708,6 @@ def turn_to(
     clock: Clock = time,
     recorder: Recorder | None = None,
     cancel: threading.Event | None = None,
-    name: str = "",
 ) -> AimResult:
     def errors(pose: Pose) -> tuple[float, float]:
         yaw_err = wrap180(yaw_deg - pose.yaw_deg)
@@ -740,5 +725,4 @@ def turn_to(
         clock=clock,
         recorder=recorder,
         cancel=cancel,
-        name=name,
     )

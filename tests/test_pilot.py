@@ -120,7 +120,6 @@ def test_follow_path_scripted_walk_records_and_commands():
         g,
         nav_controllers(g),
         recorder=rec,
-        name="walk",
     )
     assert res.arrived
     assert res.frames >= 4
@@ -329,7 +328,6 @@ def test_hold_view_strafes_to_side_without_turning():
         [(0.0, 0.0), (2.0, 0.0)],
         g,
         translate_controllers(g),
-        name="m",
     )
     assert res.arrived
     assert move.moves[0][1] > 0.0  # 初手は右へ横移動(目標が右)
@@ -677,13 +675,6 @@ def test_pilot_cancel_cancels_aim():
     p.cancel()
     res = p.aim((0.0, 1.0, 5.0))
     assert not res.converged and res.reason == "cancelled"
-
-
-def test_pilot_cancel_stops_patrol_between_targets():
-    p = _pilot(poses=[_pose(1, (0.5, 1.6, 0.5))])
-    p.cancel()
-    results = p.patrol([("a", (0.5, 1.0, 0.9), 180.0), ("b", (0.9, 1.0, 0.5), 90.0)])
-    assert results == []
 
 
 # ---- 開ループ操作 --------------------------------------------------------

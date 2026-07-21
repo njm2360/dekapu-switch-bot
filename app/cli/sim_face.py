@@ -70,7 +70,6 @@ def main() -> None:
             pitch_deg=args.pitch_err,  # 同上(pitch も 0 始まり)
             clock=SimClock(sim),
             recorder=recorder,
-            name=f"err{err:g}",
         )
         ok += res.converged
         m = res.yaw
