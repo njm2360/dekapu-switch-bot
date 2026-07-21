@@ -1,30 +1,29 @@
-import logging
 from collections.abc import Callable
 from typing import NamedTuple
 
 from app.control.maneuvers import NavResult
 from app.control.pilot import Pilot
-from app.control.recording import ControlLog
 from app.mapping.mapper import RoomMapper
 from app.spatial.navigation import NavGrid
 
-logging.basicConfig(level=logging.INFO)
-
 
 class Stop(NamedTuple):
-    name: str
     move: Callable[..., NavResult]  # pilot.goto / pilot.translate_to
     goal: tuple[float, float]
-    buttons: list[tuple[str, tuple[float, float, float]]]
+    buttons: list[tuple[float, float, float]]
+
+    @property
+    def pitch_hint(self) -> tuple[float, float, float] | None:
+        return self.buttons[0] if self.buttons else None
 
 
 MAP = "room.npz"
 
-BTN_AUTOPLAY = ("オートプレイ1h", (7.740, 7.405, 24.659))
-BTN_RLT_FAST = ("ルレ高速1h", (7.740, 7.405, 23.488))
-BTN_RLT_X25 = ("ルレx25", (7.740, 6.834, 21.505))
-BTN_QVPEN = ("QvPenオフ", (-7.740, 7.248, 18.807))
-BTN_MEMORIAL = ("記念アイテムオフ", (-19.870, 7.404, 24.229))
+BTN_AUTOPLAY = (7.740, 7.405, 24.659)  # オートプレイ1h
+BTN_RLT_FAST = (7.740, 7.405, 23.488)  # ルレ高速1h
+BTN_RLT_X25 = (7.740, 6.834, 21.505)  # ルレx25
+BTN_QVPEN = (-7.740, 7.248, 18.807)  # QvPenオフ
+BTN_MEMORIAL = (-19.870, 7.404, 24.229)  # 記念アイテムオフ
 
 SPOT_AUTO_BUY = (6.43, 24.09)
 WEST_HUB = (-6.740, 16.716)
@@ -36,55 +35,40 @@ MEMORIAL_YAW = 45.0
 def build_route(pilot: Pilot) -> list[Stop]:
     standoff = pilot.standoff_point
     return [
-        Stop("オート購入", pilot.goto, SPOT_AUTO_BUY, [BTN_AUTOPLAY, BTN_RLT_FAST]),
-        Stop("ルレx25", pilot.goto, standoff(BTN_RLT_X25[1], X25_YAW), [BTN_RLT_X25]),
+        # オート購入
+        Stop(pilot.goto, SPOT_AUTO_BUY, [BTN_AUTOPLAY, BTN_RLT_FAST]),
+        # ルレx25
+        Stop(pilot.goto, standoff(BTN_RLT_X25, X25_YAW), [BTN_RLT_X25]),
+        # 西壁ハブ
         Stop(
-            "西壁ハブ",
             pilot.goto,
             WEST_HUB,
             [
-                ("ログピックアップ", (-7.740, 7.313, 15.655)),
-                ("効果音", (-7.740, 7.212, 16.716)),
-                ("通知系サウンド", (-7.740, 7.008, 16.716)),
-                ("BGM", (-7.740, 6.812, 16.716)),
-                ("ポップアップ", (-7.740, 7.212, 17.912)),
-                ("動画プレイヤー", (-7.740, 8.040, 17.912)),
+                (-7.740, 7.313, 15.655),  # ログピックアップ
+                (-7.740, 7.212, 16.716),  # 効果音
+                (-7.740, 7.008, 16.716),  # 通知系サウンド
+                (-7.740, 6.812, 16.716),  # BGM
+                (-7.740, 7.212, 17.912),  # ポップアップ
+                (-7.740, 8.040, 17.912),  # 動画プレイヤー
             ],
         ),
-        Stop(
-            "QvPen", pilot.translate_to, standoff(BTN_QVPEN[1], QVPEN_YAW), [BTN_QVPEN]
-        ),
-        Stop(
-            "記念アイテム",
-            pilot.goto,
-            standoff(BTN_MEMORIAL[1], MEMORIAL_YAW),
-            [BTN_MEMORIAL],
-        ),
+        # QvPen
+        Stop(pilot.translate_to, standoff(BTN_QVPEN, QVPEN_YAW), [BTN_QVPEN]),
+        # 記念アイテム
+        Stop(pilot.goto, standoff(BTN_MEMORIAL, MEMORIAL_YAW), [BTN_MEMORIAL]),
     ]
 
 
 def main() -> None:
     grid = NavGrid.from_mapper(RoomMapper.load(MAP))
-    skipped = 0
-    with (
-        ControlLog.timestamped("logs", "buttons") as log,
-        Pilot.connect(grid, recorder=log) as pilot,
-    ):
+    with Pilot.connect(grid) as pilot:
         pilot.wait_until_hud()
         pilot.wait_until_active()
         for stop in build_route(pilot):
-            nav = stop.move(stop.goal, name=stop.name)
-            for name, xyz in stop.buttons:
-                if nav.arrived:
-                    res = pilot.click_at(xyz, name=name)
-                    outcome = "clicked" if res.clicked else f"skipped ({res.reason})"
-                else:
-                    outcome = f"skipped ({nav.reason})"
-                skipped += outcome != "clicked"
-                print(f"{name}: {outcome}", flush=True)
-    if skipped:
-        print(f"{skipped} skipped")
-    print(f"log: {log.path}")
+            nav = stop.move(stop.goal, pitch_at=stop.pitch_hint)
+            if nav.arrived:
+                for xyz in stop.buttons:
+                    pilot.click_at(xyz)
 
 
 if __name__ == "__main__":
