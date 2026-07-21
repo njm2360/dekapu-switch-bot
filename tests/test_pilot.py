@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from vrc_autopilot.control.controller import (
-    PatrolGains,
+    ControlTuning,
     face_controllers,
     nav_controllers,
     strafe_controller,
@@ -88,7 +88,7 @@ class ListRec:
 
 
 def _gains(**kw):
-    return PatrolGains(**kw)
+    return ControlTuning(**kw)
 
 
 # ---- follow_path(体だけ誘導) ------------------------------------------

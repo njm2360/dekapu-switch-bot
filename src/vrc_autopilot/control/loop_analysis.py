@@ -1,6 +1,6 @@
-"""巡回制御ループの周波数応答解析(安定余裕・ボード線図)
+"""制御ループの周波数応答解析(安定余裕・ボード線図)
 
-PatrolGains と同定プラント(PlantModel)から各ループの開ループ伝達関数を小信号
+ControlTuning と同定プラント(PlantModel)から各ループの開ループ伝達関数を小信号
 線形化で組み、ωc/位相余裕/ゲイン余裕/むだ時間余裕を出す
 
     L(z) = C(z) · K · [T·z^-1/(1-z^-1)] · e^{-jωTd},   z = e^{jωT}
@@ -14,7 +14,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..sysid.identify import PlantModel
-from .controller import PatrolGains
+from .controller import ControlTuning
 
 
 @dataclass(frozen=True)
@@ -45,8 +45,8 @@ class LoopMargins:
     mr: float  # 閉ループピーク |L/(1+L)| の最大
 
 
-def patrol_loops(g: PatrolGains) -> list[LoopSpec]:
-    """PatrolGains から巡回制御の全ループを組む(controller.py のビルダーと対応)。"""
+def control_loops(g: ControlTuning) -> list[LoopSpec]:
+    """ControlTuning から制御の全ループを組む(controller.py のビルダーと対応)。"""
     return [
         LoopSpec("face yaw", "yaw", g.turn_kp, g.turn_ki, g.turn_kd, True),
         LoopSpec("face pitch", "pitch", g.pitch_kp, g.pitch_ki, g.pitch_kd, True),
@@ -127,12 +127,12 @@ def loop_margins(spec: LoopSpec, plant: PlantModel) -> LoopMargins:
     return LoopMargins(spec.name, spec.axis, K, Td, wc, pm, w180, gm, dm, mr)
 
 
-def analyze_patrol(g: PatrolGains, plant: PlantModel) -> list[LoopMargins]:
-    """巡回制御の全ループの安定余裕をまとめて返す。"""
-    return [loop_margins(s, plant) for s in patrol_loops(g)]
+def analyze_loops(g: ControlTuning, plant: PlantModel) -> list[LoopMargins]:
+    """制御の全ループの安定余裕をまとめて返す。"""
+    return [loop_margins(s, plant) for s in control_loops(g)]
 
 
-def save_bode_png(g: PatrolGains, plant: PlantModel, path) -> None:
+def save_bode_png(g: ControlTuning, plant: PlantModel, path) -> None:
     """全ループの開ループボード線図(|L|・∠L と ωc/PM/GM)を1枚のPNGに保存する。"""
     import matplotlib
 
@@ -141,7 +141,7 @@ def save_bode_png(g: PatrolGains, plant: PlantModel, path) -> None:
 
     T = plant.dt_mean
     w = np.logspace(-1, math.log10(math.pi / T), 2000)
-    specs = patrol_loops(g)
+    specs = control_loops(g)
     fig, axes = plt.subplots(4, 2, figsize=(14, 15))
     flat = axes.ravel()
     for ax, spec in zip(flat, specs, strict=False):  # 余り枠が出たら下で消す
@@ -190,7 +190,7 @@ def save_bode_png(g: PatrolGains, plant: PlantModel, path) -> None:
     for ax in flat[len(specs) :]:
         ax.axis("off")
     fig.suptitle(
-        f"Patrol control loops - open-loop Bode (plant dt={T * 1000:.0f}ms)",
+        f"Control loops - open-loop Bode (plant dt={T * 1000:.0f}ms)",
         fontsize=12,
     )
     fig.tight_layout(rect=[0, 0, 1, 0.99])

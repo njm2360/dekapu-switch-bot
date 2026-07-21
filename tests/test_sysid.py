@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from vrc_autopilot.control.controller import (
-    PatrolGains,
+    ControlTuning,
     face_controllers,
     nav_controllers,
 )
@@ -242,7 +242,7 @@ def test_build_plant_skips_failed_axis():
 def test_all_control_loops_run_against_sim():
     """本番の全制御ループ(移動追従+正対)が模擬プラント注入で無改造・非実時間で回る。"""
     plant = make_plant()
-    gains = PatrolGains(nav_timeout=10.0, face_timeout=2.5)
+    gains = ControlTuning(nav_timeout=10.0, face_timeout=2.5)
     sim = SimulatedVRChat(plant)  # 原点, yaw=0(+Z向き)
     nav = follow_path(
         sim,
@@ -453,7 +453,7 @@ def test_deadtime_interpolates_crossing():
 def test_turn_to_runs_against_sim():
     """本番の正対ループ(turn_to)が模擬プラントで無改造・非実時間で回る(実時間はかからない)。"""
     plant = make_plant()
-    gains = PatrolGains(face_timeout=2.0)
+    gains = ControlTuning(face_timeout=2.0)
     sim = SimulatedVRChat(plant)
     res = turn_to(
         sim,

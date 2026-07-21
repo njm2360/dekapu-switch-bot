@@ -1,7 +1,7 @@
-"""同定プラント(plant.json)上で巡回制御ループの安定余裕を出す解析 CLI
+"""同定プラント(plant.json)上で制御ループの安定余裕を出す解析 CLI
 
 各ループ(face/nav/translate/align)の ωc/PM/GM/むだ時間余裕を表にし、任意で
-ボード線図PNGを保存する。ゲインは PatrolGains の既定値を使う
+ボード線図PNGを保存する。ゲインは ControlTuning の既定値を使う
 """
 
 import argparse
@@ -9,26 +9,26 @@ import math
 from pathlib import Path
 
 from vrc_autopilot.cli._logging import setup_logging
-from vrc_autopilot.control.controller import PatrolGains
-from vrc_autopilot.control.loop_analysis import analyze_patrol, save_bode_png
+from vrc_autopilot.control.controller import ControlTuning
+from vrc_autopilot.control.loop_analysis import analyze_loops, save_bode_png
 from vrc_autopilot.sysid.identify import PlantModel
 
 
 def main() -> None:
     setup_logging()
     parser = argparse.ArgumentParser(
-        description="plant.json上で巡回制御ループの安定余裕(ωc/PM/GM)を出す"
+        description="plant.json上で制御ループの安定余裕(ωc/PM/GM)を出す"
     )
     parser.add_argument("--model", required=True, help="probe-axesが出力したplant.json")
     parser.add_argument("--out", default=None, help="ボード線図PNGの出力先(任意)")
     args = parser.parse_args()
 
-    gains = PatrolGains()
+    gains = ControlTuning()
     plant = PlantModel.load(args.model)
 
     print(f"model: {args.model}  (dt {plant.dt_mean * 1000:.1f} ms)")
     print(f"{'loop':18}{'wc':>7}{'PM':>6}{'GMdB':>7}{'GMx':>6}{'DMms':>7}{'Mr':>6}")
-    for m in analyze_patrol(gains, plant):
+    for m in analyze_loops(gains, plant):
         wc = f"{m.wc:.2f}" if m.wc else "-"
         pm = f"{m.pm_deg:.0f}" if m.pm_deg is not None else "-"
         gmdb = f"{20 * math.log10(m.gm):.1f}" if m.gm else "-"

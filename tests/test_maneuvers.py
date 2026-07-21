@@ -1,5 +1,5 @@
 from vrc_autopilot.control.controller import (
-    PatrolGains,
+    ControlTuning,
     face_controllers,
     strafe_controller,
 )
@@ -50,9 +50,9 @@ class _ScriptedWorld:
         )
 
 
-def _gains() -> PatrolGains:
+def _gains() -> ControlTuning:
     # 短い窓・短い打切りでテストを速く回す
-    return PatrolGains(align_timeout=0.6, align_stuck_time=0.2, align_stuck_eps=0.02)
+    return ControlTuning(align_timeout=0.6, align_stuck_time=0.2, align_stuck_eps=0.02)
 
 
 # 目標は真横(+X 方向)遠方 → yaw 誤差 ≈90°、lat_err 大 → strafe 指令が出続ける

@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from vrc_autopilot.cli._logging import setup_logging
-from vrc_autopilot.control.controller import PatrolGains
+from vrc_autopilot.control.controller import ControlTuning
 from vrc_autopilot.sysid.identify import AXIS_INPUT
 from vrc_autopilot.sysid.worldcal import (
     REF_SPEED,
@@ -94,7 +94,7 @@ def main() -> None:
     _print_result(cal)
 
     try:
-        applied = cal.apply(PatrolGains())
+        applied = cal.apply(ControlTuning())
         g = applied.gains
         print(
             f"  gains: fwd_kp {g.fwd_kp:.2f}  translate_kp {g.translate_kp:.2f}  "

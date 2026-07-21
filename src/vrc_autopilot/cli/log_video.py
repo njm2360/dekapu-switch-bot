@@ -89,7 +89,7 @@ def load_frames(path: Path) -> dict[str, np.ndarray]:
         out[k] = np.array([num(r.get(k)) for r in rows])
     for k in ("phase",):
         out[k] = np.array([r.get(k) or "" for r in rows], dtype=object)
-    # 多フェーズ連結ログ(実機の patrol 等)は t がフェーズ相対で巻き戻るので、
+    # 多フェーズ連結ログ(実機のログ等)は t がフェーズ相対で巻き戻るので、
     # 巻き戻り箇所を dt 列(なければ中央値ステップ)で埋めて単調時間に変換する
     t = out["t"]
     step = np.diff(t)

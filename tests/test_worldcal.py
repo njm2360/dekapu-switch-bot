@@ -3,7 +3,7 @@ from dataclasses import replace
 
 import pytest
 
-from vrc_autopilot.control.controller import PatrolGains
+from vrc_autopilot.control.controller import ControlTuning
 from vrc_autopilot.sysid.identify import AxisModel, PlantModel
 from vrc_autopilot.sysid.sim_plant import SimClock, SimulatedVRChat
 from vrc_autopilot.sysid.worldcal import (
@@ -209,7 +209,7 @@ def test_run_world_calibration_recovers_both_axes_within_5pct(s_f, s_s):
         assert est.usable, f"{axis}: {est.reason}"
         assert est.scale == pytest.approx(s, rel=0.05)
     assert cal.meta == {"case": "synthetic"}
-    out = cal.apply(PatrolGains())
+    out = cal.apply(ControlTuning())
     assert out.s_forward == pytest.approx(s_f, rel=0.05)
     assert out.s_strafe == pytest.approx(s_s, rel=0.05)
 
@@ -224,7 +224,7 @@ def test_run_world_calibration_near_zero_is_unusable_and_apply_raises():
     assert not cal.axes["forward"].usable
     assert not cal.axes["strafe"].usable
     with pytest.raises(ValueError, match="unusable"):
-        cal.apply(PatrolGains())
+        cal.apply(ControlTuning())
 
 
 def test_run_world_calibration_ref_speed_override():
@@ -251,7 +251,7 @@ def test_run_world_calibration_ref_speed_override():
 
 
 def test_scale_gains_halves_kp_for_2x_world():
-    base = PatrolGains()
+    base = ControlTuning()
     out = scale_gains(base, 2.0, 2.0)
     assert out.gains.fwd_kp == pytest.approx(base.fwd_kp / 2.0)
     assert out.gains.strafe_kp == pytest.approx(base.strafe_kp / 2.0)
@@ -265,7 +265,7 @@ def test_scale_gains_halves_kp_for_2x_world():
 
 def test_scale_gains_scales_every_move_pid_term():
     """既定で 0 の項も含めて移動系の kp/ki/kd は全て 1/s 倍する。"""
-    base = replace(PatrolGains(), translate_ki=0.4, translate_kd=0.2, fwd_kd=0.05)
+    base = replace(ControlTuning(), translate_ki=0.4, translate_kd=0.2, fwd_kd=0.05)
     out = scale_gains(base, 2.0, 2.0)
     for name in (
         "fwd_kp",
@@ -292,7 +292,7 @@ def _cruise_speed(cmd: float, s: float, ref: float) -> float:
 @pytest.mark.parametrize("s", [1.5, 2.0, 5.0, 9.0, 20.0])
 def test_scale_gains_cruise_cap_holds_real_speed_at_tuned_level(s):
     """巡航指令は cmd 領域。不感帯があるので 1/s 倍では実巡航が保たれない。"""
-    base = PatrolGains()
+    base = ControlTuning()
     ref = REF_SPEED["forward"]
     tuned = _cruise_speed(base.speed, 1.0, ref)
     out = scale_gains(base, s, s)
@@ -302,12 +302,12 @@ def test_scale_gains_cruise_cap_holds_real_speed_at_tuned_level(s):
 @pytest.mark.parametrize("s", [9.0, 20.0, 100.0])
 def test_scale_gains_cruise_cap_never_sinks_into_the_deadband(s):
     """速いワールドほど巡航指令は下がるが、不感帯に埋まったら動けなくなる。"""
-    out = scale_gains(PatrolGains(), s, s)
+    out = scale_gains(ControlTuning(), s, s)
     assert out.gains.speed > MOVE_DEADBAND_CMD
 
 
 def test_scale_gains_caps_cruise_only_for_fast_worlds():
-    base = PatrolGains()
+    base = ControlTuning()
     fast = scale_gains(base, 2.0, 2.0)
     assert fast.gains.speed < base.speed
     assert any("cruise cap" in n for n in fast.notes)
@@ -318,7 +318,7 @@ def test_scale_gains_caps_cruise_only_for_fast_worlds():
 
 
 def test_scale_gains_cruise_cap_uses_faster_translation_axis():
-    base = PatrolGains()
+    base = ControlTuning()
     out = scale_gains(base, 1.5, 1.0)  # forward だけ速い
     assert out.gains.speed == pytest.approx(
         MOVE_DEADBAND_CMD + (base.speed - MOVE_DEADBAND_CMD) / 1.5
@@ -328,7 +328,7 @@ def test_scale_gains_cruise_cap_uses_faster_translation_axis():
 
 
 def test_scale_gains_applies_stall_floor_for_extreme_s():
-    base = PatrolGains()
+    base = ControlTuning()
     out = scale_gains(base, 10.0, 10.0)
     fwd_floor = MOVE_DEADBAND_CMD * 1.2 / base.arrive_radius
     translate_floor = MOVE_DEADBAND_CMD * 1.2 * math.sqrt(2.0) / base.arrive_radius
@@ -339,13 +339,13 @@ def test_scale_gains_applies_stall_floor_for_extreme_s():
 
 
 def test_scale_gains_no_floor_clamp_at_moderate_speed():
-    base = PatrolGains()
+    base = ControlTuning()
     out = scale_gains(base, 2.0, 2.0)
     assert not any("stall floor" in n for n in out.notes)
 
 
 def test_scale_gains_raises_on_non_positive_scale():
-    base = PatrolGains()
+    base = ControlTuning()
     with pytest.raises(ValueError):
         scale_gains(base, 0.0, 1.0)
     with pytest.raises(ValueError):
@@ -460,7 +460,7 @@ def test_worldcalibration_roundtrip_preserves_everything(tmp_path):
 
 
 def test_apply_scales_gains_for_known_scale():
-    base = PatrolGains()
+    base = ControlTuning()
     out = _cal(s_forward=2.0, s_strafe=2.0).apply(base)
     assert out.s_forward == pytest.approx(2.0)
     assert out.s_strafe == pytest.approx(2.0)
@@ -475,7 +475,7 @@ def test_apply_scales_gains_for_known_scale():
 
 def test_apply_matches_scale_gains_directly():
     """apply の結果は scale_gains(base, s_f, s_s) と同一(直パイプラインとの等価性)。"""
-    base = PatrolGains()
+    base = ControlTuning()
     applied = _cal(s_forward=1.5, s_strafe=1.0).apply(base)
     direct = scale_gains(base, 1.5, 1.0)
     assert applied.gains == direct.gains
@@ -485,14 +485,14 @@ def test_apply_matches_scale_gains_directly():
 
 
 def test_apply_prepends_warnings_to_notes():
-    base = PatrolGains()
+    base = ControlTuning()
     cal = _cal(s_forward=2.0, s_strafe=2.0, warnings=["deadtime warning present"])
     out = cal.apply(base)
     assert "deadtime warning present" in out.notes
 
 
 def test_apply_raises_when_axis_unusable():
-    base = PatrolGains()
+    base = ControlTuning()
     cal = _cal(
         axes={"forward": _est("forward", 0.02, usable=False, reason="immobilized?")}
     )
@@ -501,7 +501,7 @@ def test_apply_raises_when_axis_unusable():
 
 
 def test_apply_raises_when_axis_missing():
-    base = PatrolGains()
+    base = ControlTuning()
     cal = WorldCalibration(axes={"forward": _est("forward", 2.0)})  # strafe 欠落
     with pytest.raises(ValueError, match="missing axes"):
         cal.apply(base)
@@ -552,7 +552,7 @@ def _pilot_stubs():
 def test_pilot_applies_world_cal_object():
     from vrc_autopilot.control.pilot import Pilot
 
-    base = PatrolGains()
+    base = ControlTuning()
     grid, reader, look, move = _pilot_stubs()
     pilot = Pilot(grid, reader, look, move, world_cal=_cal(s_forward=2.0, s_strafe=2.0))
     assert pilot.gains.strafe_kp == pytest.approx(base.strafe_kp / 2.0)
@@ -567,7 +567,7 @@ def test_pilot_applies_world_cal_object():
 def test_pilot_applies_world_cal_from_file_path(tmp_path):
     from vrc_autopilot.control.pilot import Pilot
 
-    base = PatrolGains()
+    base = ControlTuning()
     path = _cal(s_forward=2.0, s_strafe=2.0).save(tmp_path / "wc.json")
     grid, reader, look, move = _pilot_stubs()
     pilot = Pilot(grid, reader, look, move, world_cal=str(path))
@@ -580,7 +580,7 @@ def test_pilot_no_world_cal_leaves_gains_default():
 
     grid, reader, look, move = _pilot_stubs()
     pilot = Pilot(grid, reader, look, move)
-    assert pilot.gains == PatrolGains()
+    assert pilot.gains == ControlTuning()
 
 
 def test_pilot_raises_on_unusable_world_cal():

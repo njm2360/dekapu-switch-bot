@@ -13,7 +13,7 @@ from ..spatial.navigation import NavGrid, Path, plan_path
 from ..sysid.worldcal import WorldCalibration
 from .actuator import InteractActuator, LookActuator, MoveActuator
 from .controller import (
-    PatrolGains,
+    ControlTuning,
     face_controllers,
     nav_controllers,
     strafe_controller,
@@ -87,7 +87,7 @@ class Pilot:
         *,
         interact: InteractActuator | None = None,
         focus: WindowFocus | None = None,
-        gains: PatrolGains | None = None,
+        gains: ControlTuning | None = None,
         world_cal: WorldCalibration | str | None = None,
         recorder: Recorder | None = None,
     ):
@@ -102,7 +102,7 @@ class Pilot:
         self.move = move
         self.interact = interact
         self._focus = focus
-        self.gains = gains or PatrolGains()
+        self.gains = gains or ControlTuning()
         if world_cal is not None:
             if not isinstance(world_cal, WorldCalibration):
                 world_cal = WorldCalibration.load(world_cal)
@@ -130,7 +130,7 @@ class Pilot:
         grid: NavGrid,
         *,
         osc: VRChatOSC | None = None,
-        gains: PatrolGains | None = None,
+        gains: ControlTuning | None = None,
         world_cal: WorldCalibration | str | None = None,
         look: LookActuator | None = None,
         interact: InteractActuator | None = None,

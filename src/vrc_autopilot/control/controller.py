@@ -3,7 +3,7 @@
 制御ループは AxisController に (誤差, dt) を渡して指令 [-1,1] を得るだけ。PID の
 ゲインや不感帯補償はここに閉じ込め、アクチュエータに合わせて差し替え・再調整する。
 
-巡回制御のチューニング定数はすべて PatrolGains に集約する。CLI はこの既定値を
+制御のチューニング定数はすべて ControlTuning に集約する。CLI はこの既定値を
 上書きするだけにして、数値の二重管理を避ける。
 """
 
@@ -75,8 +75,8 @@ class FaceControllers:
 
 
 @dataclass
-class PatrolGains:
-    """巡回制御のチューニング定数一式(既定値はここに集約)。
+class ControlTuning:
+    """制御のチューニング定数一式(既定値はここに集約)。
 
     既定値は同定プラント(plant.json)上で全フェーズの制御ループを回して検証した値
     (根拠と安定範囲は gain-tuning.md)。実機で答え合わせして更新すること。
@@ -140,7 +140,7 @@ class PatrolGains:
     strafe_deadzone: float = 0.10
 
 
-def _nav_pitch_controller(g: PatrolGains) -> AxisController:
+def _nav_pitch_controller(g: ControlTuning) -> AxisController:
     """移動中の pitch 事前整合の制御器(nav/translate 共通)。目標が動くのでtolは入れない"""
     return AxisController(
         PID(
@@ -155,7 +155,7 @@ def _nav_pitch_controller(g: PatrolGains) -> AxisController:
     )
 
 
-def nav_controllers(g: PatrolGains) -> NavControllers:
+def nav_controllers(g: ControlTuning) -> NavControllers:
     """移動追従用の制御器を組む。yaw は face と同じ不感帯補償つき(tol は入れない。
     根拠と安定範囲は gain-tuning.md の nav 節)。"""
     yaw = AxisController(
@@ -175,7 +175,7 @@ def nav_controllers(g: PatrolGains) -> NavControllers:
     return NavControllers(yaw=yaw, forward=forward, pitch=_nav_pitch_controller(g))
 
 
-def translate_controllers(g: PatrolGains) -> TranslateControllers:
+def translate_controllers(g: ControlTuning) -> TranslateControllers:
     """視点固定の並進用の制御器を組む。前後・左右を同じゲインの独立 PID で詰める。
 
     指令は両軸とも ±speed に制限する。移動軸の不感帯は小さく(|指令|<0.10 で
@@ -201,7 +201,7 @@ def translate_controllers(g: PatrolGains) -> TranslateControllers:
     )
 
 
-def strafe_controller(g: PatrolGains) -> AxisController:
+def strafe_controller(g: ControlTuning) -> AxisController:
     """align フェーズの横移動制御器。誤差=横ずれ[m] → Horizontal指令[-1,1]。
     tol は横ずれの収束閾値(align_tol)。"""
     return AxisController(
@@ -218,7 +218,7 @@ def strafe_controller(g: PatrolGains) -> AxisController:
     )
 
 
-def face_controllers(g: PatrolGains) -> FaceControllers:
+def face_controllers(g: ControlTuning) -> FaceControllers:
     """正対用の制御器を組む。yaw/pitch とも誤差が tol 未満なら指令0。yaw は不感帯補償つき。"""
     yaw = AxisController(
         PID(

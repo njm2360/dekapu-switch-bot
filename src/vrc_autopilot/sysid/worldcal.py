@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from statistics import median
 
-from ..control.controller import PatrolGains
+from ..control.controller import ControlTuning
 from ..control.maneuvers import PoseSource
 from .identify import AxisModel, ProbeRun, identify_axis, run_move_probe
 
@@ -114,21 +114,21 @@ def probe_axis_speed(
 class ScaledGains:
     """ゲイン再スケールの結果"""
 
-    gains: PatrolGains
+    gains: ControlTuning
     s_forward: float
     s_strafe: float
     notes: list[str]
 
 
 def scale_gains(
-    base: PatrolGains,
+    base: ControlTuning,
     s_forward: float,
     s_strafe: float,
     *,
     move_deadband: float = MOVE_DEADBAND_CMD,
     cap_cruise: bool = True,
 ) -> ScaledGains:
-    """移動系ゲインを速度倍率で再スケールした PatrolGains を導出する。
+    """移動系ゲインを速度倍率で再スケールした ControlTuning を導出する。
 
     kp/ki/kd を 1/s 倍して実効ループゲイン(ωc ≈ kp·K)を保つ。視点系はワールド
     不変なので触らない。失速下限(kp·arrive_radius > 移動不感帯)を割るスケールはクランプ
@@ -196,8 +196,8 @@ class WorldCalibration:
     warnings: list[str] = field(default_factory=list)  # むだ時間増加など
     meta: dict = field(default_factory=dict)
 
-    def apply(self, base: PatrolGains) -> ScaledGains:
-        """移動系ゲインをこのワールドの倍率で再スケールした PatrolGains を導出する"""
+    def apply(self, base: ControlTuning) -> ScaledGains:
+        """移動系ゲインをこのワールドの倍率で再スケールした ControlTuning を導出する"""
         missing = [a for a in CAL_AXES if a not in self.axes]
         if missing:
             raise ValueError(f"calibration is missing axes: {missing}")

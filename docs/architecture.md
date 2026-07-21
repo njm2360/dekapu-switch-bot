@@ -66,8 +66,8 @@ VRChat 画面(HUDビットグリッド)
 | -------------------------- | -------------------------------------------------------------------------------------- |
 | `control/guidance.py`      | フレーム単位の照準幾何(`wrap180` / `heading_error` / `pitch_error` / `forward_factor`) |
 | `control/pid.py`           | 汎用 PID(離散・積分の溜まりすぎ防止・不感帯補償)                                       |
-| `control/controller.py`    | `AxisController`(PID+tolゲート)/ `PatrolGains` / 制御器ビルダー                        |
-| `control/loop_analysis.py` | ループ整形解析(安定余裕・ボード線図。`analyze_patrol` / `save_bode_png`)               |
+| `control/controller.py`    | `AxisController`(PID+tolゲート)/ `ControlTuning` / 制御器ビルダー                      |
+| `control/loop_analysis.py` | ループ整形解析(安定余裕・ボード線図。`analyze_loops` / `save_bode_png`)                |
 | `control/actuator.py`      | `LookActuator`/`MoveActuator` IF + `MouseLookActuator`(DirectInput)                    |
 | `control/osc.py`           | VRChat への OSC 送信(look/move/stop で両 actuator IF を満たす)                         |
 | `control/recording.py`     | `Recorder` IF(`ControlLog`=CSV / `ListRecorder`)+ `AxisMetrics`(応答指標)              |

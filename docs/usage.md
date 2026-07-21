@@ -16,10 +16,10 @@
 
 ## `log-video` — 制御ログを動画で再生
 
-フレームCSV(実機の `logs/patrol_*.csv`またはsimの記録)を、一人称3D(レイキャスト)+上面2D地図の並置mp4にする。経路への追従とぎこちなさの目視確認用。ffmpeg が PATH に必要。
+フレームCSV(実機の `logs/run_*.csv`またはsimの記録)を、一人称3D(レイキャスト)+上面2D地図の並置mp4にする。経路への追従とぎこちなさの目視確認用。ffmpeg が PATH に必要。
 
 ```bash
-uv run log-video --csv logs/patrol_<日時>.csv --map maps/<日時>/room.npz --out run.mp4
+uv run log-video --csv logs/run_<日時>.csv --map maps/<日時>/room.npz --out run.mp4
 ```
 
 `probe-axes` / `calibrate-world` の手順は [system-identification.md](system-identification.md)、`bode-margins` とオフライン検証の使い分けは [verification.md](verification.md) と [gain-tuning.md](gain-tuning.md) を参照。

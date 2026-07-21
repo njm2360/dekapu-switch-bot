@@ -7,7 +7,7 @@ import pytest
 from vrc_autopilot.control.actuator import LookActuator, MouseLookActuator, MoveActuator
 from vrc_autopilot.control.controller import (
     AxisController,
-    PatrolGains,
+    ControlTuning,
     face_controllers,
     nav_controllers,
 )
@@ -67,7 +67,7 @@ def test_axis_controller_passes_through_pid_logging():
 
 
 def test_nav_and_face_controllers_from_gains():
-    g = PatrolGains(speed=0.6, face_tol=1.5, turn_deadzone=0.55)
+    g = ControlTuning(speed=0.6, face_tol=1.5, turn_deadzone=0.55)
     nav = nav_controllers(g)
     face = face_controllers(g)
     # 前進制御器は速度上限が speed
