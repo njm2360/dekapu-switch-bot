@@ -80,11 +80,11 @@ class Pilot:
 
     def __init__(
         self,
-        grid: NavGrid,
         reader: PoseSource,
         look: LookActuator,
         move: MoveActuator,
         *,
+        grid: NavGrid | None = None,
         interact: InteractActuator | None = None,
         focus: WindowFocus | None = None,
         gains: ControlTuning | None = None,
@@ -93,6 +93,7 @@ class Pilot:
     ):
         """各アクチュエータと reader を直接渡す注入版(実機 I/O 込みは connect())。
 
+        grid 省略時は経路計画系が RuntimeError になる。
         interact 省略時は押下系(press/click/activate)が RuntimeError になる。
         world_cal を渡すと gains に速度スケールを反映する。
         """
@@ -127,8 +128,8 @@ class Pilot:
     @classmethod
     def connect(
         cls,
-        grid: NavGrid,
         *,
+        grid: NavGrid | None = None,
         osc: VRChatOSC | None = None,
         gains: ControlTuning | None = None,
         world_cal: WorldCalibration | str | None = None,
@@ -138,6 +139,7 @@ class Pilot:
     ) -> Pilot:
         """実機 I/O(キャプチャ+OSC)を組んだ Pilot を作る(注入版は __init__)。
 
+        grid 省略時は経路計画系が RuntimeErrorとなる。
         osc を渡すと host/port を変えられる(省略時は 127.0.0.1:9000)。
         look / interact を渡すと視点・押下だけ差し替えられる。省略時はどれも OSC。
         world_cal は calibrate-world の JSON パス(またはロード済み WorldCalibration)。
@@ -152,10 +154,10 @@ class Pilot:
         osc.set_run(True)
         try:
             pilot = cls(
-                grid,
                 reader,
                 look or osc,
                 osc,
+                grid=grid,
                 interact=interact or osc,
                 focus=capture,
                 gains=gains,
@@ -350,6 +352,14 @@ class Pilot:
         self.grid = grid
 
     # ---- 経路計画(dry-run) --------------------------------------------
+    def _require_grid(self) -> NavGrid:
+        if self.grid is None:
+            raise RuntimeError(
+                "no NavGrid configured (pass grid= to Pilot.connect/__init__ "
+                "or set one via use_grid())"
+            )
+        return self.grid
+
     def plan(
         self,
         xz: tuple[float, float],
@@ -359,12 +369,14 @@ class Pilot:
         """動かずに経路だけ計画する(到達不能・ポーズ未取得なら None)。
 
         start 省略時は現在位置。マップ範囲外の目標は plan_path 同様 ValueError。
+        grid 未設定なら RuntimeError。
         """
+        grid = self._require_grid()
         if start is None:
             start = self.xz()
             if start is None:
                 return None
-        return plan_path(self.grid, start, xz)
+        return plan_path(grid, start, xz)
 
     def can_reach(
         self,
@@ -417,12 +429,13 @@ class Pilot:
 
         pitch_at((x,y,z))を渡すと、移動中にpitchを先合わせする
         """
+        grid = self._require_grid()
         pose = self.reader.get_latest()
         if pose is None:
             logger.warning("[goto] no current pose (HUD?)")
             return NavResult(False, False, "no_pose", None, 0.0, 0)
         start = (pose.position[0], pose.position[2])
-        path = plan_path(self.grid, start, xz)
+        path = plan_path(grid, start, xz)
         if path is None:
             logger.warning("[goto] no path (unreachable)")
             return NavResult(False, False, "unreachable", None, 0.0, 0)
@@ -457,12 +470,13 @@ class Pilot:
         前後+横移動で経路を追うため、横に曲がる経路では goto より遅い。
         pitch_at((x,y,z))を渡すと、移動中にpitchを先合わせする。
         """
+        grid = self._require_grid()
         pose = self.reader.get_latest()
         if pose is None:
             logger.warning("[translate] no current pose (HUD?)")
             return NavResult(False, False, "no_pose", None, 0.0, 0)
         start = (pose.position[0], pose.position[2])
-        path = plan_path(self.grid, start, xz)
+        path = plan_path(grid, start, xz)
         if path is None:
             logger.warning("[translate] no path (unreachable)")
             return NavResult(False, False, "unreachable", None, 0.0, 0)

@@ -58,7 +58,7 @@ def build_route(pilot: Pilot) -> list[Stop]:
 
 def main() -> None:
     grid = NavGrid.from_mapper(RoomMapper.load(MAP))
-    with Pilot.connect(grid) as pilot:
+    with Pilot.connect(grid=grid) as pilot:
         pilot.wait_until_hud()
         pilot.wait_until_active()
         for stop in build_route(pilot):

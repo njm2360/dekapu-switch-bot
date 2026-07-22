@@ -554,7 +554,9 @@ def test_pilot_applies_world_cal_object():
 
     base = ControlTuning()
     grid, reader, look, move = _pilot_stubs()
-    pilot = Pilot(grid, reader, look, move, world_cal=_cal(s_forward=2.0, s_strafe=2.0))
+    pilot = Pilot(
+        reader, look, move, grid=grid, world_cal=_cal(s_forward=2.0, s_strafe=2.0)
+    )
     assert pilot.gains.strafe_kp == pytest.approx(base.strafe_kp / 2.0)
     assert pilot.gains.fwd_kp == pytest.approx(base.fwd_kp / 2.0)
     assert pilot.gains.translate_kp == pytest.approx(base.translate_kp / 2.0)
@@ -570,7 +572,7 @@ def test_pilot_applies_world_cal_from_file_path(tmp_path):
     base = ControlTuning()
     path = _cal(s_forward=2.0, s_strafe=2.0).save(tmp_path / "wc.json")
     grid, reader, look, move = _pilot_stubs()
-    pilot = Pilot(grid, reader, look, move, world_cal=str(path))
+    pilot = Pilot(reader, look, move, grid=grid, world_cal=str(path))
     assert pilot.gains.strafe_kp == pytest.approx(base.strafe_kp / 2.0)
     assert pilot.gains.turn_kp == base.turn_kp
 
@@ -579,7 +581,7 @@ def test_pilot_no_world_cal_leaves_gains_default():
     from vrc_autopilot.control.pilot import Pilot
 
     grid, reader, look, move = _pilot_stubs()
-    pilot = Pilot(grid, reader, look, move)
+    pilot = Pilot(reader, look, move, grid=grid)
     assert pilot.gains == ControlTuning()
 
 
@@ -591,4 +593,4 @@ def test_pilot_raises_on_unusable_world_cal():
         axes={"forward": _est("forward", 0.02, usable=False, reason="immobilized?")}
     )
     with pytest.raises(ValueError, match="unusable"):
-        Pilot(grid, reader, look, move, world_cal=cal)
+        Pilot(reader, look, move, grid=grid, world_cal=cal)

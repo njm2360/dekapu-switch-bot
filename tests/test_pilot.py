@@ -361,10 +361,10 @@ def test_pilot_translate_to_reaches_holding_view():
     # Pilot.translate_to は plan_path で壁回避しつつ、視点を変えずに到達する(start≈goal で即到達)
     look, move = RecActuator(), RecActuator()
     pilot = Pilot(
-        _grid(np.ones((10, 10), bool)),
         FakeReader([_pose(1, (0.5, 1.6, 0.5))]),
         look,
         move,
+        grid=_grid(np.ones((10, 10), bool)),
     )
     res = pilot.translate_to((0.5, 0.5))
     assert res.path_found and res.arrived
@@ -436,7 +436,10 @@ def _grid(free: np.ndarray) -> NavGrid:
 def test_pilot_goto_no_pose():
     # HUD からポーズが取れない → no_pose で即返る(実機不要)
     pilot = Pilot(
-        _grid(np.ones((10, 10), bool)), FakeReader([]), RecActuator(), RecActuator()
+        FakeReader([]),
+        RecActuator(),
+        RecActuator(),
+        grid=_grid(np.ones((10, 10), bool)),
     )
     res = pilot.goto((0.5, 0.5))
     assert not res.path_found and res.reason == "no_pose"
@@ -445,10 +448,10 @@ def test_pilot_goto_no_pose():
 def test_pilot_goto_unreachable():
     # free が全 False → 経路なし
     pilot = Pilot(
-        _grid(np.zeros((10, 10), bool)),
         FakeReader([_pose(1, (0.5, 1.6, 0.5))]),
         RecActuator(),
         RecActuator(),
+        grid=_grid(np.zeros((10, 10), bool)),
     )
     res = pilot.goto((0.9, 0.9))
     assert not res.path_found and res.reason == "unreachable"
@@ -458,7 +461,10 @@ def test_pilot_standoff_point_is_in_front_of_button():
     # ボタン(0.5,*,0.5)が +X 向き(face_yaw=90°)→ 法線上の正面点 (0.7, 0.5)。
     # 現在地には依存しない(壁裏回り込み防止)
     pilot = Pilot(
-        _grid(np.ones((10, 10), bool)), FakeReader([]), RecActuator(), RecActuator()
+        FakeReader([]),
+        RecActuator(),
+        RecActuator(),
+        grid=_grid(np.ones((10, 10), bool)),
     )
     assert pilot.standoff_point((0.5, 1.0, 0.5), 90.0, 0.2) == pytest.approx((0.7, 0.5))
     assert pilot.standoff_point((0.5, 1.0, 0.5), 180.0, 0.3) == pytest.approx(
@@ -468,7 +474,10 @@ def test_pilot_standoff_point_is_in_front_of_button():
 
 def test_pilot_standoff_zero_targets_button_xz():
     pilot = Pilot(
-        _grid(np.ones((10, 10), bool)), FakeReader([]), RecActuator(), RecActuator()
+        FakeReader([]),
+        RecActuator(),
+        RecActuator(),
+        grid=_grid(np.ones((10, 10), bool)),
     )
     assert pilot.standoff_point((0.9, 1.0, 0.5), 90.0, 0.0) == (0.9, 0.5)
 
@@ -476,10 +485,10 @@ def test_pilot_standoff_zero_targets_button_xz():
 def test_pilot_standoff_default_uses_gains():
     g = _gains(standoff=0.2)
     pilot = Pilot(
-        _grid(np.ones((10, 10), bool)),
         FakeReader([]),
         RecActuator(),
         RecActuator(),
+        grid=_grid(np.ones((10, 10), bool)),
         gains=g,
     )
     assert pilot.standoff_point((0.5, 1.0, 0.5), 90.0) == pytest.approx((0.7, 0.5))
@@ -506,7 +515,7 @@ class FakeInteract:
 def _pilot(free=None, poses=(), **kw) -> Pilot:
     free = np.ones((10, 10), bool) if free is None else free
     return Pilot(
-        _grid(free), FakeReader(list(poses)), RecActuator(), RecActuator(), **kw
+        FakeReader(list(poses)), RecActuator(), RecActuator(), grid=_grid(free), **kw
     )
 
 
@@ -592,6 +601,39 @@ def test_pilot_plan_with_explicit_start_needs_no_pose():
     assert p.plan((0.85, 0.85), start=(0.15, 0.15)) is not None
 
 
+# ---- grid 省略(照準・押下だけ使う) -------------------------------------
+def _gridless(poses=(), **kw) -> Pilot:
+    return Pilot(FakeReader(list(poses)), RecActuator(), RecActuator(), **kw)
+
+
+def test_pilot_without_grid_planning_raises():
+    # grid 未設定なら経路計画系は RuntimeError
+    p = _gridless(poses=[_pose(1, (0.5, 1.6, 0.5))])
+    for call in (
+        lambda: p.plan((0.5, 0.5)),
+        lambda: p.goto((0.5, 0.5)),
+        lambda: p.translate_to((0.5, 0.5)),
+    ):
+        with pytest.raises(RuntimeError):
+            call()
+
+
+def test_pilot_without_grid_state_queries_work():
+    # grid 無しでも状態クエリ・ヘルパは動く
+    p = _gridless(poses=[_pose(1, (0.5, 1.6, 0.5), yaw_deg=90.0)])
+    assert p.xz() == (0.5, 0.5)
+    assert p.bearing_to((0.9, 0.5)) == pytest.approx(90.0)
+
+
+def test_pilot_use_grid_enables_planning():
+    # 後から use_grid() で入れれば計画できる
+    p = _gridless(poses=[_pose(1, (0.15, 1.6, 0.15))])
+    with pytest.raises(RuntimeError):
+        p.plan((0.85, 0.85))
+    p.use_grid(_grid(np.ones((10, 10), bool)))
+    assert p.plan((0.85, 0.85)) is not None
+
+
 # ---- interact(押下) -----------------------------------------------------
 def test_pilot_click_delegates_to_interact():
     it = FakeInteract()
@@ -635,10 +677,10 @@ def test_pilot_click_at_skips_when_not_converged():
             return _pose(self.t, (0.0, 1.0, 0.0), yaw_deg=90.0)
 
     p = Pilot(
-        _grid(np.ones((10, 10), bool)),
         EndlessMisaligned(),
         RecActuator(),
         RecActuator(),
+        grid=_grid(np.ones((10, 10), bool)),
         interact=it,
         gains=g,
     )
@@ -708,10 +750,10 @@ def test_pilot_is_hud_alive_detects_fresh_and_stale():
 def test_pilot_is_usable_without_hardware_imports():
     # capture/osc を import せず、注入だけで Pilot が動く
     pilot = Pilot(
-        _grid(np.ones((10, 10), bool)),
         FakeReader([_pose(1, (0.5, 1.6, 0.5))]),
         RecActuator(),
         RecActuator(),
+        grid=_grid(np.ones((10, 10), bool)),
     )
     assert pilot._owns_io is False
     res = pilot.goto((0.5, 0.5))  # start≈goal なのですぐ到達
