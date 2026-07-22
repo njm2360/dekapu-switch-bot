@@ -184,7 +184,6 @@ def follow_path(
         while True:
             if cancel is not None and cancel.is_set():
                 reason = "cancelled"
-                logger.info("[nav] cancelled")
                 break
             pose, dt, now = _next_frame(reader, last_t, last_time, clock=clock)
             if pose is None:
@@ -253,17 +252,21 @@ def follow_path(
                     pitch_acc.update(pitch_err, pitch_cmd, now - t0, dt, gains.face_tol)
             if now - t0 > gains.nav_timeout:
                 reason = "timeout"
-                logger.warning("[nav] timeout")
+                logger.warning(
+                    "[nav] timeout after %.1fs (%.1fm to goal)",
+                    gains.nav_timeout,
+                    end_dist,
+                )
                 break
     finally:
         # 中断時も必ず停止
         look.stop()
         move.stop()
     elapsed = clock.monotonic() - t0
-    logger.debug(
+    logger.info(
         "[nav] end: %s wp=%d/%d frames=%d %.2fs",
         reason,
-        seg + 1,
+        len(wps) if reason == "arrived" else seg + 1,
         len(wps),
         frames,
         elapsed,
@@ -312,7 +315,6 @@ def follow_path_translate(
         while idx < len(wps):
             if cancel is not None and cancel.is_set():
                 reason = "cancelled"
-                logger.info("[translate] cancelled")
                 break
             pose, dt, now = _next_frame(reader, last_t, last_time, clock=clock)
             if pose is None:
@@ -387,17 +389,21 @@ def follow_path_translate(
                     pitch_acc.update(pitch_err, pitch_cmd, now - t0, dt, gains.face_tol)
             if now - t0 > gains.nav_timeout:
                 reason = "timeout"
-                logger.warning("[translate] timeout")
+                logger.warning(
+                    "[translate] timeout after %.1fs (%.1fm to goal)",
+                    gains.nav_timeout,
+                    dist,
+                )
                 break
     finally:
         # 中断時も必ず停止
         move.stop()
         look.stop()
     elapsed = clock.monotonic() - t0
-    logger.debug(
+    logger.info(
         "[translate] end: %s wp=%d/%d frames=%d %.2fs",
         reason,
-        idx,
+        len(wps) if reason == "arrived" else idx,
         len(wps),
         frames,
         elapsed,
@@ -453,6 +459,7 @@ def _face_loop(
             pose, dt, now = _next_frame(reader, last_t, last_time, clock=clock)
             if pose is None:
                 reason = "hud_lost"
+                logger.warning("[%s] HUD lost, abort", phase)
                 break
             last_t, last_time = pose.time_ms, now
             frames += 1
@@ -503,6 +510,8 @@ def _face_loop(
         # 中断時も必ず停止
         look.stop()
     elapsed = clock.monotonic() - t0
+    if reason == "timeout":
+        logger.warning("[%s] timeout after %.1fs", phase, gains.face_timeout)
     logger.debug(
         "[%s] end: %s yaw_err=%+.2f pitch_err=%+.2f frames=%d %.2fs",
         phase,
@@ -574,6 +583,7 @@ def strafe_align(
             pose, dt, now = _next_frame(reader, last_t, last_time, clock=clock)
             if pose is None:
                 reason = "hud_lost"
+                logger.warning("[align] HUD lost, abort")
                 break
             last_t, last_time = pose.time_ms, now
             frames += 1
@@ -606,6 +616,7 @@ def strafe_align(
             if now - win_t >= gains.align_stuck_time:
                 if win_commanded and win_path < gains.align_stuck_eps:
                     reason = "stuck"
+                    logger.warning("[align] stuck (blocked by wall?)")
                     break
                 win_t, win_prev, win_path, win_commanded = now, cur, 0.0, False
 
@@ -644,6 +655,8 @@ def strafe_align(
         move.stop()
         look.stop()
     elapsed = clock.monotonic() - t0
+    if reason == "timeout":
+        logger.warning("[align] timeout after %.1fs", gains.align_timeout)
     logger.debug(
         "[align] end: %s yaw_err=%+.2f pitch_err=%+.2f frames=%d %.2fs",
         reason,

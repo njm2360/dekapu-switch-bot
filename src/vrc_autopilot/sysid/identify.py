@@ -429,8 +429,9 @@ def run_pitch_probe(
             send,
             home_level,
             hold,
-            stop_when=lambda p: abs(p.pitch_deg - p0) > 2.0
-            or abs(p.pitch_deg) >= abs_limit,
+            stop_when=lambda p: (
+                abs(p.pitch_deg - p0) > 2.0 or abs(p.pitch_deg) >= abs_limit
+            ),
             record=False,
         )
         if abs(cur_pitch() - p0) > 0.5:
@@ -451,8 +452,9 @@ def run_pitch_probe(
                 send,
                 cmd,
                 2 * hold,
-                stop_when=lambda p: abs(p.pitch_deg) <= home_tol
-                or abs(p.pitch_deg) >= abs_limit,
+                stop_when=lambda p: (
+                    abs(p.pitch_deg) <= home_tol or abs(p.pitch_deg) >= abs_limit
+                ),
                 record=False,
             )
 

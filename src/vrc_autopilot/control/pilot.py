@@ -150,6 +150,9 @@ class Pilot:
         capture = WindowsVRChatCapture()
         reader = PoseReader(source=capture).start()
         osc = osc or VRChatOSC()
+        logger.info(
+            "[pilot] connect osc=%s:%d %s=true", osc.host, osc.port, HUD_ENABLE_PARAM
+        )
         osc.avatar_param(HUD_ENABLE_PARAM, True)
         osc.set_run(True)
         try:
@@ -407,10 +410,12 @@ class Pilot:
         中断されたループは reason="cancelled" で返る。再開する時は resume()。
         即時のアクチュエータ停止(開ループ)は stop() を使う。
         """
+        logger.info("[pilot] cancel")
         self._cancel.set()
 
     def resume(self) -> None:
         """cancel() の解除。以後の maneuver は通常どおり動く。"""
+        logger.info("[pilot] resume")
         self._cancel.clear()
 
     @property
@@ -438,17 +443,18 @@ class Pilot:
         grid = self._require_grid()
         pose = self.reader.get_latest()
         if pose is None:
-            logger.warning("[goto] no current pose (HUD?)")
+            logger.warning("[nav] no current pose (HUD?)")
             return NavResult(False, False, "no_pose", None, 0.0, 0)
         start = (pose.position[0], pose.position[2])
         path = plan_path(grid, start, xz)
         if path is None:
-            logger.warning("[goto] no path (unreachable)")
+            logger.warning("[nav] no path (%.1f, %.1f) -> (%.1f, %.1f)", *start, *xz)
             return NavResult(False, False, "unreachable", None, 0.0, 0)
         logger.info(
-            "[goto] path %dwp / %.1fm%s",
+            "[nav] path %dwp / %.1fm -> (%.1f, %.1f)%s",
             len(path.waypoints),
             path.length,
+            *xz,
             " (goal on wall -> nearest floor)" if path.goal_blocked else "",
         )
         res = follow_path(
@@ -485,12 +491,15 @@ class Pilot:
         start = (pose.position[0], pose.position[2])
         path = plan_path(grid, start, xz)
         if path is None:
-            logger.warning("[translate] no path (unreachable)")
+            logger.warning(
+                "[translate] no path (%.1f, %.1f) -> (%.1f, %.1f)", *start, *xz
+            )
             return NavResult(False, False, "unreachable", None, 0.0, 0)
         logger.info(
-            "[translate] path %dwp / %.1fm (view locked)%s",
+            "[translate] path %dwp / %.1fm -> (%.1f, %.1f)%s",
             len(path.waypoints),
             path.length,
+            *xz,
             " (goal on wall -> nearest floor)" if path.goal_blocked else "",
         )
         res = follow_path_translate(
@@ -518,11 +527,13 @@ class Pilot:
 
         pitch_at((x,y,z))を渡すと、移動中にpitchを先合わせする。
         """
+        wps = list(waypoints)
+        logger.info("[nav] follow %dwp (no planning)", len(wps))
         return follow_path(
             self.reader,
             self.look,
             self.move,
-            list(waypoints),
+            wps,
             self._gains_for(timeout, "nav_timeout"),
             self.nav,
             pitch_target=pitch_at,
@@ -534,7 +545,7 @@ class Pilot:
         self, xyz: tuple[float, float, float], *, timeout: float | None = None
     ) -> AimResult:
         """target(x,y,z)へ視点(yaw/pitch)を向ける(体は動かさない)。"""
-        return aim_at(
+        res = aim_at(
             self.reader,
             self.look,
             xyz,
@@ -543,12 +554,19 @@ class Pilot:
             recorder=self.recorder,
             cancel=self._cancel,
         )
+        logger.info(
+            "[face] yaw_err=%+.2f° pitch_err=%+.2f° (%s)",
+            res.yaw_err,
+            res.pitch_err,
+            res.reason,
+        )
+        return res
 
     def align(
         self, xyz: tuple[float, float, float], *, timeout: float | None = None
     ) -> AimResult:
         """視点は回さず、体の横移動で target への横ずれを詰める(最終照準)。"""
-        return strafe_align(
+        res = strafe_align(
             self.reader,
             self.look,
             self.move,
@@ -559,6 +577,13 @@ class Pilot:
             recorder=self.recorder,
             cancel=self._cancel,
         )
+        logger.info(
+            "[align] yaw_err=%+.2f° pitch_err=%+.2f° (%s)",
+            res.yaw_err,
+            res.pitch_err,
+            res.reason,
+        )
+        return res
 
     def turn_to(
         self,
@@ -568,7 +593,7 @@ class Pilot:
         timeout: float | None = None,
     ) -> AimResult:
         """指定した yaw(必要なら pitch)へ視点だけ回す(座標でなく角度で指定)。"""
-        return turn_to(
+        res = turn_to(
             self.reader,
             self.look,
             yaw_deg,
@@ -578,10 +603,18 @@ class Pilot:
             recorder=self.recorder,
             cancel=self._cancel,
         )
+        logger.info(
+            "[turn] yaw_err=%+.2f° pitch_err=%+.2f° (%s)",
+            res.yaw_err,
+            res.pitch_err,
+            res.reason,
+        )
+        return res
 
     # ---- 開ループ操作 --------------------------------------------------
     def stop(self) -> None:
         """移動・視点指令を即座に止める(緊急停止。maneuver の中断は cancel())。"""
+        logger.info("[pilot] stop")
         try:
             self.look.stop()
         finally:
@@ -594,6 +627,9 @@ class Pilot:
 
         cancel() で中断できる。終了時は必ず停止する。
         """
+        logger.info(
+            "[pilot] move_for %.1fs forward=%.2f strafe=%.2f", duration, forward, strafe
+        )
         deadline = time.monotonic() + duration
         try:
             while time.monotonic() < deadline and not self._cancel.is_set():
@@ -614,33 +650,24 @@ class Pilot:
     def press(self) -> None:
         """押しっぱなしにする(離すのは release。interact 未設定なら RuntimeError)。"""
         self._require_interact().press()
+        logger.info("[interact] press")
 
     def release(self) -> None:
         """press した押下を離す。"""
         self._require_interact().release()
+        logger.info("[interact] release")
 
     def click(self) -> None:
         """一回押して離す(interact 未設定なら RuntimeError)。"""
         self._require_interact().click()
+        logger.info("[interact] click")
 
     # ---- 複合(移動+照準+押下) ---------------------------------------
     def _aim_sequence(self, xyz: tuple[float, float, float]) -> AimResult:
         """aim → (align_tol > 0 なら)align の照準シーケンス。"""
         aim = self.aim(xyz)
-        logger.info(
-            "[aim] yaw_err=%+.2f° pitch_err=%+.2f° (%s)",
-            aim.yaw_err,
-            aim.pitch_err,
-            aim.reason,
-        )
         if self.gains.align_tol > 0.0:
             aim = self.align(xyz)
-            logger.info(
-                "[align] yaw_err=%+.2f° pitch_err=%+.2f° (%s)",
-                aim.yaw_err,
-                aim.pitch_err,
-                aim.reason,
-            )
         return aim
 
     def approach(
@@ -663,10 +690,11 @@ class Pilot:
         """その場で照準(aim/align)し、収束したら click する(移動しない)。"""
         self._require_interact()
         aim = self._aim_sequence(xyz)
-        if not aim.converged:
-            return ClickAtResult(aim, False)
-        self.click()
-        return ClickAtResult(aim, True)
+        if aim.converged:
+            self.click()
+        res = ClickAtResult(aim, aim.converged)
+        logger.info("[click_at] %s", res.reason)
+        return res
 
     def activate(
         self,
@@ -678,26 +706,29 @@ class Pilot:
         """正面へ移動 → 照準 → 押下 の一連(ボタン1個を押し切る最上位API)。"""
         self._require_interact()
         nav, aim = self.approach(xyz, face_yaw_deg, standoff=standoff)
-        if aim is None or not aim.converged:
-            return ActivateResult(nav, aim, False)
-        self.click()
-        return ActivateResult(nav, aim, True)
+        clicked = aim is not None and aim.converged
+        if clicked:
+            self.click()
+        res = ActivateResult(nav, aim, clicked)
+        logger.info("[activate] %s", res.reason)
+        return res
 
     # ---- ライフサイクル ------------------------------------------------
     def close(self) -> None:
         """アクチュエータを止め、connect() で確保した I/O を閉じる。"""
         try:
             self.look.stop()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("[pilot] close look.stop: %s", e)
         try:
             self.move.stop()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("[pilot] close move.stop: %s", e)
         if self._owns_io:
             if self._osc is not None:
                 self._osc.close()
             self.reader.stop()
+            logger.info("[pilot] closed")
 
     def __enter__(self) -> Pilot:
         return self

@@ -9,6 +9,8 @@ def _clamp(v: float, lo: float = -1.0, hi: float = 1.0) -> float:
 
 class VRChatOSC:
     def __init__(self, host: str = "127.0.0.1", port: int = 9000):
+        self.host = host
+        self.port = port
         self.client = SimpleUDPClient(host, port)
 
     # ---- 連続軸(-1..1) ------------------------------------------------
