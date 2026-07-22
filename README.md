@@ -1,5 +1,9 @@
 # vrc-autopilot
 
+[![PyPI](https://img.shields.io/pypi/v/vrc-autopilot)](https://pypi.org/project/vrc-autopilot/)
+[![Python](https://img.shields.io/badge/python-3.14-blue)](https://pypi.org/project/vrc-autopilot/)
+[![License](https://img.shields.io/pypi/l/vrc-autopilot)](LICENSE)
+
 [VRCPositionHUD](https://github.com/njm2360/vrc-position-hud)を利用してOSCで移動・視点を操作する自動化ツール
 
 > [!WARNING]
@@ -16,6 +20,12 @@
 
 - Python 3.14
 - [uv](https://docs.astral.sh/uv/)
+
+## インストール
+
+```sh
+uv add vrc-autopilot
+```
 
 ## サンプルコード
 
