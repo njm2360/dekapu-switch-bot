@@ -6,6 +6,12 @@ readme = "README.md"
 requires-python = ">=3.14"
 license = "BSD-2-Clause"
 license-files = ["LICENSE"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3 :: Only",
+    "Operating System :: Microsoft :: Windows",
+]
 dependencies = [
     "numpy>=2.5",
     "scipy>=1.18",
