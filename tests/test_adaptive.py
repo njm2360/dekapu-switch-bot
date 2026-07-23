@@ -5,6 +5,8 @@
 同定側の除外が効くことを実機なしで検証する。
 """
 
+from __future__ import annotations
+
 import pytest
 
 from vrc_autopilot.sysid.adaptive import (

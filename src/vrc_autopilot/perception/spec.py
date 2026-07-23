@@ -1,4 +1,6 @@
 # HUD ビットグリッドのプロトコル定数
+from __future__ import annotations
+
 MAGIC = 0x5AC3E7A1
 
 # HUD有効化: Parameter名

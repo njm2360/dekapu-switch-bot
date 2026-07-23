@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from vrc_autopilot.cli._keys import key_events
 from vrc_autopilot.cli._logging import setup_logging
 from vrc_autopilot.perception.capture import WindowsVRChatCapture

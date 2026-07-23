@@ -5,6 +5,8 @@ Recorder はフレームごとの行の記録先(CSV 等)の抽象。AxisAccumul
 にまとめる。制御ループからは独立した純粋な計算で、recorder を付けたときだけ走る。
 """
 
+from __future__ import annotations
+
 import csv
 from dataclasses import asdict, dataclass, fields
 from datetime import datetime

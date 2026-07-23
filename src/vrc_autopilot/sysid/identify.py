@@ -9,6 +9,8 @@ sim_plant.SimulatedVRChat がこのモデルを積分すると実機なしでゲ
 から漏れる。手法の詳細は docs/system-identification.md を参照。
 """
 
+from __future__ import annotations
+
 import csv
 import json
 import logging

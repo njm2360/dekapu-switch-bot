@@ -7,6 +7,8 @@
 上書きするだけにして、数値の二重管理を避ける。
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 from .pid import PID

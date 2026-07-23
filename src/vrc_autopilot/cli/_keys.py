@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 def key_events():
     try:
         import msvcrt

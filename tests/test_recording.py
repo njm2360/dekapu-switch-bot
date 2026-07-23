@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from vrc_autopilot.control.recording import AxisAccumulator
 
 

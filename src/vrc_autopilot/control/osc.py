@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import time
 
 from pythonosc.udp_client import SimpleUDPClient

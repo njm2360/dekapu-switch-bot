@@ -9,6 +9,8 @@ plant.json は出力ディレクトリに生ログがある軸すべてから組
 不感帯はクライアント側の設定なのでワールド不変。むだ時間は fps 依存。
 """
 
+from __future__ import annotations
+
 import argparse
 import time
 from datetime import datetime
