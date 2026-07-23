@@ -5,6 +5,7 @@ from vrc_autopilot.control.controller import (
 )
 from vrc_autopilot.control.maneuvers import strafe_align
 from vrc_autopilot.core.pose import Pose
+from vrc_autopilot.core.vec import Vec2, Vec3
 
 
 class _NullAct:
@@ -24,7 +25,7 @@ class _ScriptedWorld:
     yaw は固定(目標が真横にある構図なので lat_err は大きいまま=指令を出し続ける)。
     """
 
-    def __init__(self, positions: list[tuple[float, float]], *, dt: float = 0.05):
+    def __init__(self, positions: list[Vec2], *, dt: float = 0.05):
         self.positions = positions
         self.dt = dt
         self.t = 0.0
@@ -44,9 +45,12 @@ class _ScriptedWorld:
     # ---- PoseSource ----
     def get_latest(self) -> Pose:
         x, z = self.positions[min(self.frame, len(self.positions) - 1)]
-        fwd = (0.0, 0.0, 1.0)  # yaw=0(+Z向き)、pitch=0
+        fwd = Vec3(0.0, 0.0, 1.0)  # yaw=0(+Z向き)、pitch=0
         return Pose(
-            time_ms=self.frame, position=(x, 1.5, z), forward=fwd, up=(0.0, 1.0, 0.0)
+            time_ms=self.frame,
+            position=Vec3(x, 1.5, z),
+            forward=fwd,
+            up=Vec3(0.0, 1.0, 0.0),
         )
 
 
@@ -56,14 +60,14 @@ def _gains() -> ControlTuning:
 
 
 # 目標は真横(+X 方向)遠方 → yaw 誤差 ≈90°、lat_err 大 → strafe 指令が出続ける
-_TARGET = (5.0, 1.5, 0.0)
+_TARGET = Vec3(5.0, 1.5, 0.0)
 
 
 def test_stuck_not_triggered_by_in_place_oscillation():
     """その場往復(正味変位≈0 でも経路長は大)では、指令を出していてもスタック判定しない。"""
     gains = _gains()
     # x が 0.0/0.1 を往復(毎フレーム 0.1m 移動)
-    positions = [(0.1 if i % 2 else 0.0, 0.0) for i in range(40)]
+    positions = [Vec2(0.1 if i % 2 else 0.0, 0.0) for i in range(40)]
     world = _ScriptedWorld(positions)
     res = strafe_align(
         world,
@@ -81,7 +85,7 @@ def test_stuck_not_triggered_by_in_place_oscillation():
 def test_stuck_triggered_by_true_zero_motion():
     """本当に動けない(位置が完全固定)場合は、指令を出しているのでスタック判定する。"""
     gains = _gains()
-    positions = [(0.0, 0.0) for _ in range(40)]
+    positions = [Vec2(0.0, 0.0) for _ in range(40)]
     world = _ScriptedWorld(positions)
     res = strafe_align(
         world,
@@ -99,7 +103,7 @@ def test_stuck_triggered_by_true_zero_motion():
 def test_stuck_not_triggered_without_command():
     """指令を出していない(win_commanded=False)なら、動いていなくてもスタックにしない。"""
     gains = _gains()
-    positions = [(0.0, 0.0) for _ in range(40)]
+    positions = [Vec2(0.0, 0.0) for _ in range(40)]
     world = _ScriptedWorld(positions)
     res = strafe_align(
         world,
@@ -107,7 +111,7 @@ def test_stuck_not_triggered_without_command():
         _NullAct(),
         # 真正面かつ上方(+Z, 高所)。yaw 誤差0 → lat_err0 → strafe 指令0だが、
         # pitch 誤差が残るので収束はしない(win_commanded=False のまま静止)
-        (0.0, 5.0, 5.0),
+        Vec3(0.0, 5.0, 5.0),
         gains,
         face_controllers(gains),
         strafe_controller(gains),

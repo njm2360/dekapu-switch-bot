@@ -15,6 +15,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
+from vrc_autopilot.core.vec import Vec3
 from vrc_autopilot.mapping.mapper import RoomMapper
 from vrc_autopilot.spatial.navigation import NavGrid
 
@@ -214,7 +215,7 @@ def render_3d(
     z: float,
     yaw: float,
     pitch: float,
-    target: tuple[float, float, float] | None,
+    target: Vec3 | None,
     w: int,
     h: int,
 ) -> np.ndarray:
@@ -256,7 +257,7 @@ def render_3d(
 
 def draw_target(
     img: np.ndarray,
-    target: tuple[float, float, float],
+    target: Vec3,
     x: float,
     y: float,
     z: float,
@@ -556,7 +557,7 @@ def main() -> None:
             frame = np.empty((h, w, 3), np.uint8)
             if solid is not None:
                 tgt = (
-                    (d["tx"][i], d["ty"][i], d["tz"][i])
+                    Vec3(d["tx"][i], d["ty"][i], d["tz"][i])
                     if d["phase"][i] in TARGET_PHASES
                     else None
                 )

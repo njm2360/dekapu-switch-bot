@@ -9,6 +9,7 @@ from itertools import pairwise
 import numpy as np
 import pytest
 
+from vrc_autopilot.core.vec import Vec2
 from vrc_autopilot.mapping.mapper import RoomMapper
 from vrc_autopilot.spatial.navigation import NavGrid, plan_path
 
@@ -55,7 +56,7 @@ def test_rectangle_interior_free_exterior_blocked():
 
 def test_open_room_path_is_near_straight():
     grid = NavGrid.from_mapper(rectangle_mapper(6.0, 5.0), cell=0.1, avatar_radius=0.2)
-    path = plan_path(grid, (1.0, 1.0), (5.0, 4.0))
+    path = plan_path(grid, Vec2(1.0, 1.0), Vec2(5.0, 4.0))
     assert path is not None
     straight = math.hypot(5.0 - 1.0, 4.0 - 1.0)
     # 障害物なしなのでほぼ直線(グリッド/対角の誤差ぶんの余裕)
@@ -66,8 +67,8 @@ def test_l_shape_forces_detour():
     grid = NavGrid.from_mapper(
         l_shaped_mapper(), cell=0.1, avatar_radius=0.2, gap_close=0.3
     )
-    start = (5.0, 1.0)  # 下アームの右端
-    goal = (1.0, 5.0)  # 左アームの上端
+    start = Vec2(5.0, 1.0)  # 下アームの右端
+    goal = Vec2(1.0, 5.0)  # 左アームの上端
     path = plan_path(grid, start, goal)
     assert path is not None
     straight = math.hypot(goal[0] - start[0], goal[1] - start[1])  # ≈5.66
@@ -122,7 +123,7 @@ def test_interior_wall_is_blocked():
 def test_path_detours_around_interior_wall():
     grid = NavGrid.from_mapper(partitioned_room_mapper(), cell=0.1, avatar_radius=0.2)
     # 内壁で隔てられた左右を結ぶには、上の通路(z>4)へ迂回するしかない
-    path = plan_path(grid, (2.0, 3.0), (8.0, 3.0))
+    path = plan_path(grid, Vec2(2.0, 3.0), Vec2(8.0, 3.0))
     assert path is not None
     assert path.length > 6.0  # 直進(6.0m)より長い=迂回している
     # 内壁(x=5, z<4)を越えるため、上の通路(z>4)まで回り込む経由点がある
@@ -136,7 +137,7 @@ def test_path_detours_around_interior_wall():
 def test_los_smoothing_reduces_waypoints_in_open_room():
     # 障害物のない部屋では A* のジグザグが直線1本に畳まれ、経由点が少ない
     grid = NavGrid.from_mapper(rectangle_mapper(8.0, 6.0), cell=0.1, avatar_radius=0.2)
-    path = plan_path(grid, (1.0, 1.0), (7.0, 5.0))  # 斜め
+    path = plan_path(grid, Vec2(1.0, 1.0), Vec2(7.0, 5.0))  # 斜め
     assert path is not None
     assert len(path.waypoints) <= 3  # start と goal 近辺のみ
     # ほぼ直線(グリッド誤差の範囲)
@@ -147,7 +148,7 @@ def test_los_smoothing_reduces_waypoints_in_open_room():
 def test_los_smoothing_keeps_detour_around_wall():
     # 内壁があると見通しが切れるので、迂回のための経由点は残る
     grid = NavGrid.from_mapper(partitioned_room_mapper(), cell=0.1, avatar_radius=0.2)
-    path = plan_path(grid, (2.0, 3.0), (8.0, 3.0))
+    path = plan_path(grid, Vec2(2.0, 3.0), Vec2(8.0, 3.0))
     assert path is not None
     assert len(path.waypoints) >= 3  # 直線1本にはならない
 
@@ -155,7 +156,7 @@ def test_los_smoothing_keeps_detour_around_wall():
 def test_goal_on_wall_routes_to_nearest_free():
     grid = NavGrid.from_mapper(rectangle_mapper(6.0, 5.0), cell=0.1, avatar_radius=0.2)
     # 壁の外にあるボタン → 最寄りの床へ迂回、goal_blocked フラグが立つ
-    path = plan_path(grid, (3.0, 2.5), (6.5, 2.5))
+    path = plan_path(grid, Vec2(3.0, 2.5), Vec2(6.5, 2.5))
     assert path is not None
     assert path.goal_blocked
     r, c = grid.world_to_cell(*path.snapped_goal_xz)
@@ -168,7 +169,7 @@ def test_unreachable_returns_none():
     # ここでは開始を壁の中に置いても nearest_free で解決するので、
     # 代わりに free を全消しして到達不能を作る
     grid.free[:] = False
-    assert plan_path(grid, (1.0, 1.0), (2.0, 2.0)) is None
+    assert plan_path(grid, Vec2(1.0, 1.0), Vec2(2.0, 2.0)) is None
 
 
 # ---- クリアランス(線分密サンプル採点) ----------------------------------
@@ -211,7 +212,7 @@ def test_path_keeps_margin_from_concave_corner():
     grid = NavGrid.from_mapper(
         l_shaped_mapper(), cell=0.1, avatar_radius=0.2, gap_close=0.3
     )
-    path = plan_path(grid, (5.0, 1.0), (1.0, 5.0))
+    path = plan_path(grid, Vec2(5.0, 1.0), Vec2(1.0, 5.0))
     assert path is not None
     assert _min_wall_clearance(path.waypoints, L_CORNERS) >= 0.4
     _assert_segments_all_free(grid, path.waypoints)
@@ -220,7 +221,7 @@ def test_path_keeps_margin_from_concave_corner():
 def test_los_segments_never_cross_blocked_cells():
     # 間仕切り部屋: 直線化後の各線分も(経由点だけでなく)全長にわたり free を通る
     grid = NavGrid.from_mapper(partitioned_room_mapper(), cell=0.1, avatar_radius=0.2)
-    path = plan_path(grid, (2.0, 3.0), (8.0, 3.0))
+    path = plan_path(grid, Vec2(2.0, 3.0), Vec2(8.0, 3.0))
     assert path is not None
     _assert_segments_all_free(grid, path.waypoints)
 
@@ -254,7 +255,7 @@ def test_narrow_corridor_stays_reachable_with_margin():
     grid = NavGrid.from_mapper(
         dumbbell_mapper(), cell=0.1, avatar_radius=0.2, gap_close=0.3
     )
-    path = plan_path(grid, (2.0, 2.0), (8.0, 2.0))
+    path = plan_path(grid, Vec2(2.0, 2.0), Vec2(8.0, 2.0))
     assert path is not None
     _assert_segments_all_free(grid, path.waypoints)
     # 通路内はほぼ中央を通る(半幅0.35に対して0.25以上のクリアランス)
@@ -264,7 +265,7 @@ def test_narrow_corridor_stays_reachable_with_margin():
 def test_open_room_margin_does_not_bend_far_path():
     # 壁から十分離れた直線経路は margin の影響を受けず直線のまま
     grid = NavGrid.from_mapper(rectangle_mapper(6.0, 5.0), cell=0.1, avatar_radius=0.2)
-    path = plan_path(grid, (1.0, 1.0), (5.0, 4.0))
+    path = plan_path(grid, Vec2(1.0, 1.0), Vec2(5.0, 4.0))
     assert path is not None
     straight = math.hypot(4.0, 3.0)
     assert path.length == pytest.approx(straight, rel=0.15)
@@ -303,7 +304,7 @@ def test_doorway_wide_enough_is_passable():
     grid = NavGrid.from_mapper(
         doorway_mapper(0.6), cell=0.1, avatar_radius=0.25, gap_close=0.6
     )
-    path = plan_path(grid, (2.0, 2.5), (8.0, 2.5))
+    path = plan_path(grid, Vec2(2.0, 2.5), Vec2(8.0, 2.5))
     assert path is not None
     assert not path.goal_blocked  # 左右は同一連結成分(ドアで繋がる)
     # 経路がドア中央(x≈5, z≈2.5)を実際に横切る
@@ -317,7 +318,7 @@ def test_doorway_too_narrow_is_blocked():
     grid = NavGrid.from_mapper(
         doorway_mapper(0.4), cell=0.1, avatar_radius=0.25, gap_close=0.6
     )
-    assert plan_path(grid, (2.0, 2.5), (8.0, 2.5)) is None
+    assert plan_path(grid, Vec2(2.0, 2.5), Vec2(8.0, 2.5)) is None
 
 
 def full_partition_mapper():
@@ -339,7 +340,7 @@ def test_goal_on_full_partition_snaps_to_start_side():
     # 壁面上のゴールは、スタートと同じ連結成分(左室)の最寄り床に吸着する。
     # 壁の裏側(右室)へは吸着しない。
     grid = NavGrid.from_mapper(full_partition_mapper(), cell=0.1, avatar_radius=0.25)
-    path = plan_path(grid, (2.0, 2.5), (5.0, 2.5))
+    path = plan_path(grid, Vec2(2.0, 2.5), Vec2(5.0, 2.5))
     assert path is not None
     assert path.goal_blocked
     assert path.snapped_goal_xz[0] < 5.0  # 到達セルはスタート側(x<5)
@@ -348,7 +349,7 @@ def test_goal_on_full_partition_snaps_to_start_side():
 def test_goal_in_far_room_returns_none():
     # 仕切られた隣室(右室)の深部は、迂回距離が max_goal_divert=1.0 を超えるため None
     grid = NavGrid.from_mapper(full_partition_mapper(), cell=0.1, avatar_radius=0.25)
-    assert plan_path(grid, (2.0, 2.5), (8.0, 2.5)) is None
+    assert plan_path(grid, Vec2(2.0, 2.5), Vec2(8.0, 2.5)) is None
 
 
 def pillar_mapper():
@@ -365,7 +366,7 @@ def pillar_mapper():
 def test_goal_on_pillar_face_snaps_to_room_side():
     # 柱の西面 (3,4) 上のゴールは、部屋側(x<3)の床へ吸着する(柱内部へは吸着しない)
     grid = NavGrid.from_mapper(pillar_mapper(), cell=0.1, avatar_radius=0.25)
-    path = plan_path(grid, (1.0, 1.0), (3.0, 4.0))
+    path = plan_path(grid, Vec2(1.0, 1.0), Vec2(3.0, 4.0))
     assert path is not None
     assert path.goal_blocked
     assert path.snapped_goal_xz[0] < 3.0  # 部屋側に到達
@@ -374,7 +375,7 @@ def test_goal_on_pillar_face_snaps_to_room_side():
 def test_goal_at_pillar_center_returns_none():
     # 柱の中心 (4,4) は孤立領域で、迂回距離が max_goal_divert=1.0 を超える → None
     grid = NavGrid.from_mapper(pillar_mapper(), cell=0.1, avatar_radius=0.25)
-    assert plan_path(grid, (1.0, 1.0), (4.0, 4.0)) is None
+    assert plan_path(grid, Vec2(1.0, 1.0), Vec2(4.0, 4.0)) is None
 
 
 def north_gap_mapper(gap: float):
@@ -403,7 +404,7 @@ def test_gap_close_seals_narrow_gap():
         north_gap_mapper(0.5), cell=0.1, avatar_radius=0.25, gap_close=0.6
     )
     assert grid.free.any()
-    path = plan_path(grid, (1.0, 1.0), (5.0, 5.0))
+    path = plan_path(grid, Vec2(1.0, 1.0), Vec2(5.0, 5.0))
     assert path is not None
 
 
@@ -415,7 +416,7 @@ def test_gap_close_wider_gap_floods_interior_empty_grid(caplog):
             north_gap_mapper(0.8), cell=0.1, avatar_radius=0.25, gap_close=0.6
         )
     assert int(grid.free.sum()) == 0
-    assert plan_path(grid, (1.0, 1.0), (5.0, 5.0)) is None
+    assert plan_path(grid, Vec2(1.0, 1.0), Vec2(5.0, 5.0)) is None
     assert "walkable grid is empty" in caplog.text
 
 
@@ -423,6 +424,6 @@ def test_out_of_bounds_start_or_goal_raises():
     # マップ範囲外の start / goal は暗黙クランプせず ValueError を投げる
     grid = NavGrid.from_mapper(rectangle_mapper(6.0, 5.0), cell=0.1, avatar_radius=0.2)
     with pytest.raises(ValueError):
-        plan_path(grid, (1.0, 1.0), (100.0, 100.0))  # goal が遠く範囲外
+        plan_path(grid, Vec2(1.0, 1.0), Vec2(100.0, 100.0))  # goal が遠く範囲外
     with pytest.raises(ValueError):
-        plan_path(grid, (100.0, 100.0), (1.0, 1.0))  # start が範囲外
+        plan_path(grid, Vec2(100.0, 100.0), Vec2(1.0, 1.0))  # start が範囲外

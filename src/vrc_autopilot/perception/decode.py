@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..core.pose import Pose
+from ..core.vec import Vec3
 from .spec import (
     BLOCK,
     COLS,
@@ -87,9 +88,9 @@ def words_to_pose(words: np.ndarray) -> Pose:
     floats = words[2:11].astype(np.uint32).view(np.float32)
     return Pose(
         time_ms=int(words[IDX_TIME]),
-        position=tuple(float(v) for v in floats[0:3]),
-        forward=tuple(float(v) for v in floats[3:6]),
-        up=tuple(float(v) for v in floats[6:9]),
+        position=Vec3(*(float(v) for v in floats[0:3])),
+        forward=Vec3(*(float(v) for v in floats[3:6])),
+        up=Vec3(*(float(v) for v in floats[6:9])),
     )
 
 

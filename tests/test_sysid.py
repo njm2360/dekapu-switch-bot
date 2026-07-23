@@ -16,6 +16,7 @@ from vrc_autopilot.control.controller import (
 )
 from vrc_autopilot.control.maneuvers import aim_at, follow_path, turn_to
 from vrc_autopilot.control.recording import ListRecorder
+from vrc_autopilot.core.vec import Vec2, Vec3
 from vrc_autopilot.sysid.identify import (
     AxisModel,
     PlantModel,
@@ -248,7 +249,7 @@ def test_all_control_loops_run_against_sim():
         sim,
         sim,
         sim,
-        [(0.0, 0.0), (0.0, 1.5)],
+        [Vec2(0.0, 0.0), Vec2(0.0, 1.5)],
         gains,
         nav_controllers(gains),
         clock=SimClock(sim),
@@ -256,7 +257,7 @@ def test_all_control_loops_run_against_sim():
     aim = aim_at(
         sim,
         sim,
-        (1.0, 1.5, 4.0),
+        Vec3(1.0, 1.5, 4.0),
         gains,
         face_controllers(gains),
         clock=SimClock(sim),

@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 
 from ..core.pose import Pose
+from ..core.vec import Vec2, Vec3
 from ..perception.capture import WindowFocus
 from ..perception.reader import ReaderStats
 from ..perception.spec import HUD_ENABLE_PARAM
@@ -177,24 +178,24 @@ class Pilot:
 
     # ---- 状態クエリ(sense) --------------------------------------------
     @staticmethod
-    def _xz_of(target: Iterable[float]) -> tuple[float, float]:
+    def _xz_of(target: Vec2 | Vec3) -> Vec2:
         """(x,z) / (x,y,z) のどちらでも水平成分を取り出す。"""
         t = tuple(target)
-        return (t[0], t[-1])
+        return Vec2(t[0], t[-1])
 
     def pose(self) -> Pose | None:
         """直近の 6DoF ポーズ(未取得なら None)。"""
         return self.reader.get_latest()
 
-    def position(self) -> tuple[float, float, float] | None:
+    def position(self) -> Vec3 | None:
         """現在位置 (x, y, z) [m]。"""
         pose = self.pose()
         return pose.position if pose else None
 
-    def xz(self) -> tuple[float, float] | None:
+    def xz(self) -> Vec2 | None:
         """現在位置の水平成分 (x, z) [m]。"""
         pose = self.pose()
-        return (pose.position[0], pose.position[2]) if pose else None
+        return pose.position.xz if pose else None
 
     def yaw(self) -> float | None:
         """現在の yaw [deg](+Z 基準)。"""
@@ -206,20 +207,19 @@ class Pilot:
         pose = self.pose()
         return pose.pitch_deg if pose else None
 
-    def distance_to(self, target: Iterable[float]) -> float | None:
+    def distance_to(self, target: Vec2 | Vec3) -> float | None:
         """target((x,z) または (x,y,z))までの水平距離[m]。ポーズ未取得なら None。"""
         cur = self.xz()
         if cur is None:
             return None
-        tx, tz = self._xz_of(target)
-        return math.hypot(tx - cur[0], tz - cur[1])
+        return cur.dist(self._xz_of(target))
 
-    def is_near(self, target: Iterable[float], radius: float) -> bool:
+    def is_near(self, target: Vec2 | Vec3, radius: float) -> bool:
         """target から radius [m] 以内にいるか(ポーズ未取得なら False)。"""
         d = self.distance_to(target)
         return d is not None and d <= radius
 
-    def bearing_to(self, target: Iterable[float]) -> float | None:
+    def bearing_to(self, target: Vec2 | Vec3) -> float | None:
         """target を向くのに必要な yaw [deg](+Z 基準の絶対方位)。"""
         cur = self.xz()
         if cur is None:
@@ -227,16 +227,16 @@ class Pilot:
         tx, tz = self._xz_of(target)
         return math.degrees(math.atan2(tx - cur[0], tz - cur[1]))
 
-    def yaw_error_to(self, target: Iterable[float]) -> float | None:
+    def yaw_error_to(self, target: Vec2 | Vec3) -> float | None:
         """target への yaw 誤差[deg](最短回り、+で右)。"""
         pose = self.pose()
         if pose is None:
             return None
-        cur = (pose.position[0], pose.position[2])
+        cur = pose.position.xz
         err, _ = heading_error(cur, pose.yaw_deg, self._xz_of(target))
         return err
 
-    def pitch_error_to(self, target: tuple[float, float, float]) -> float | None:
+    def pitch_error_to(self, target: Vec3) -> float | None:
         """target への pitch 誤差[deg](+はもっと上を向く必要)。"""
         pose = self.pose()
         if pose is None:
@@ -316,24 +316,23 @@ class Pilot:
         return False
 
     def wait_until_near(
-        self, target: Iterable[float], radius: float, timeout: float
+        self, target: Vec2 | Vec3, radius: float, timeout: float
     ) -> bool:
         """target から radius [m] 以内に入るまで待つ(外部要因で運ばれる時など)。"""
-        t = tuple(target)
-        return self.wait_until(lambda: self.is_near(t, radius), timeout)
+        return self.wait_until(lambda: self.is_near(target, radius), timeout)
 
     # ---- 幾何ヘルパ ----------------------------------------------------
     def standoff_point(
         self,
-        xyz: tuple[float, float, float],
+        xyz: Vec3,
         face_yaw_deg: float,
         dist: float | None = None,
-    ) -> tuple[float, float]:
+    ) -> Vec2:
         """目標の正面 dist [m](省略時 gains.standoff)に立つ位置の XZ。"""
         d = self.gains.standoff if dist is None else dist
         return _standoff_point(xyz, face_yaw_deg, d)
 
-    def face_yaw_to(self, xyz: Iterable[float]) -> float | None:
+    def face_yaw_to(self, xyz: Vec2 | Vec3) -> float | None:
         """現在位置から見た目標面の法線方向(目標→現在地の方位)[deg]。
 
         目標の向きが事前に分からない時、standoff_point / approach の face_yaw_deg に
@@ -365,9 +364,9 @@ class Pilot:
 
     def plan(
         self,
-        xz: tuple[float, float],
+        xz: Vec2,
         *,
-        start: tuple[float, float] | None = None,
+        start: Vec2 | None = None,
     ) -> Path | None:
         """動かずに経路だけ計画する(到達不能・ポーズ未取得なら None)。
 
@@ -383,9 +382,9 @@ class Pilot:
 
     def can_reach(
         self,
-        xz: tuple[float, float],
+        xz: Vec2,
         *,
-        start: tuple[float, float] | None = None,
+        start: Vec2 | None = None,
     ) -> bool:
         """xz へ到達できるか(範囲外・ポーズ未取得も False。動かない)。"""
         try:
@@ -395,9 +394,9 @@ class Pilot:
 
     def path_length(
         self,
-        xz: tuple[float, float],
+        xz: Vec2,
         *,
-        start: tuple[float, float] | None = None,
+        start: Vec2 | None = None,
     ) -> float | None:
         """xz までの経路長[m](到達不能なら None。動かない)。"""
         path = self.plan(xz, start=start)
@@ -431,9 +430,9 @@ class Pilot:
     # ---- 移動(act) ----------------------------------------------------
     def goto(
         self,
-        xz: tuple[float, float],
+        xz: Vec2,
         *,
-        pitch_at: tuple[float, float, float] | None = None,
+        pitch_at: Vec3 | None = None,
         timeout: float | None = None,
     ) -> NavResult:
         """xz へ経路計画して移動する(壁回避あり。視点は進行方向へ向く)。
@@ -445,7 +444,7 @@ class Pilot:
         if pose is None:
             logger.warning("[nav] no current pose (HUD?)")
             return NavResult(False, False, "no_pose", None, 0.0, 0)
-        start = (pose.position[0], pose.position[2])
+        start = pose.position.xz
         path = plan_path(grid, start, xz)
         if path is None:
             logger.warning("[nav] no path (%.1f, %.1f) -> (%.1f, %.1f)", *start, *xz)
@@ -473,9 +472,9 @@ class Pilot:
 
     def translate_to(
         self,
-        xz: tuple[float, float],
+        xz: Vec2,
         *,
-        pitch_at: tuple[float, float, float] | None = None,
+        pitch_at: Vec3 | None = None,
         timeout: float | None = None,
     ) -> NavResult:
         """視点を回さず xz へ並進する(壁回避は goto と同じ plan_path)。
@@ -488,7 +487,7 @@ class Pilot:
         if pose is None:
             logger.warning("[translate] no current pose (HUD?)")
             return NavResult(False, False, "no_pose", None, 0.0, 0)
-        start = (pose.position[0], pose.position[2])
+        start = pose.position.xz
         path = plan_path(grid, start, xz)
         if path is None:
             logger.warning(
@@ -518,9 +517,9 @@ class Pilot:
 
     def follow(
         self,
-        waypoints: Iterable[tuple[float, float]],
+        waypoints: Iterable[Vec2],
         *,
-        pitch_at: tuple[float, float, float] | None = None,
+        pitch_at: Vec3 | None = None,
         timeout: float | None = None,
     ) -> NavResult:
         """与えた waypoints をそのまま追従する(経路計画なし。goto の低レベル版)。
@@ -541,9 +540,7 @@ class Pilot:
             cancel=self._cancel,
         )
 
-    def aim(
-        self, xyz: tuple[float, float, float], *, timeout: float | None = None
-    ) -> AimResult:
+    def aim(self, xyz: Vec3, *, timeout: float | None = None) -> AimResult:
         """target(x,y,z)へ視点(yaw/pitch)を向ける(体は動かさない)。"""
         res = aim_at(
             self.reader,
@@ -562,9 +559,7 @@ class Pilot:
         )
         return res
 
-    def align(
-        self, xyz: tuple[float, float, float], *, timeout: float | None = None
-    ) -> AimResult:
+    def align(self, xyz: Vec3, *, timeout: float | None = None) -> AimResult:
         """視点は回さず、体の横移動で target への横ずれを詰める(最終照準)。"""
         res = strafe_align(
             self.reader,
@@ -663,7 +658,7 @@ class Pilot:
         logger.info("[interact] click")
 
     # ---- 複合(移動+照準+押下) ---------------------------------------
-    def _aim_sequence(self, xyz: tuple[float, float, float]) -> AimResult:
+    def _aim_sequence(self, xyz: Vec3) -> AimResult:
         """aim → (align_tol > 0 なら)align の照準シーケンス。"""
         aim = self.aim(xyz)
         if self.gains.align_tol > 0.0:
@@ -672,7 +667,7 @@ class Pilot:
 
     def approach(
         self,
-        xyz: tuple[float, float, float],
+        xyz: Vec3,
         face_yaw_deg: float,
         *,
         standoff: float | None = None,
@@ -686,7 +681,7 @@ class Pilot:
             return nav, None
         return nav, self._aim_sequence(xyz)
 
-    def click_at(self, xyz: tuple[float, float, float]) -> ClickAtResult:
+    def click_at(self, xyz: Vec3) -> ClickAtResult:
         """その場で照準(aim/align)し、収束したら click する(移動しない)。"""
         self._require_interact()
         aim = self._aim_sequence(xyz)
@@ -698,7 +693,7 @@ class Pilot:
 
     def activate(
         self,
-        xyz: tuple[float, float, float],
+        xyz: Vec3,
         face_yaw_deg: float,
         *,
         standoff: float | None = None,

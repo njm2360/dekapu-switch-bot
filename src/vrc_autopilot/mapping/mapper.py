@@ -7,6 +7,7 @@ from typing import Literal
 import numpy as np
 
 from ..core.pose import Pose
+from ..core.vec import Vec2, Vec3
 
 Kind = Literal["outer", "inner"]
 _KINDS: tuple[str, str] = ("outer", "inner")  # 保存時の int 対応: outer=0, inner=1
@@ -97,7 +98,7 @@ class RoomMapper:
 
     def __init__(self, min_move: float = 0.02):
         self.min_move = min_move
-        self._xyz: list[tuple[float, float, float]] = []
+        self._xyz: list[Vec3] = []
         self._yaw: list[float] = []
         self._t: list[int] = []
         self._seg: list[int] = []  # 各点のセグメントID(ペンアップで分割)
@@ -106,7 +107,7 @@ class RoomMapper:
             "outer"
         ]  # セグメントID -> kind。常に len == _cur_seg+1
         self._mode: str = "outer"  # 現在の記録モード(=_kind[_cur_seg])
-        self._last_xz: tuple[float, float] | None = None
+        self._last_xz: Vec2 | None = None
 
     # ---- 追加 ----------------------------------------------------------
     def add_pose(self, pose: Pose) -> bool:
@@ -116,15 +117,13 @@ class RoomMapper:
 
     def add(self, x: float, y: float, z: float, yaw: float = 0.0, t: int = 0) -> bool:
         if self._last_xz is not None and self.min_move > 0.0:
-            dx = x - self._last_xz[0]
-            dz = z - self._last_xz[1]
-            if dx * dx + dz * dz < self.min_move * self.min_move:
+            if self._last_xz.dist((x, z)) < self.min_move:
                 return False
-        self._xyz.append((float(x), float(y), float(z)))
+        self._xyz.append(Vec3(float(x), float(y), float(z)))
         self._yaw.append(float(yaw))
         self._t.append(int(t))
         self._seg.append(self._cur_seg)
-        self._last_xz = (x, z)
+        self._last_xz = Vec2(x, z)
         return True
 
     def _cur_has_points(self) -> bool:
@@ -207,7 +206,7 @@ class RoomMapper:
     def _refresh_last_xz(self) -> None:
         if self._cur_has_points():
             x, _, z = self._xyz[-1]
-            self._last_xz = (x, z)
+            self._last_xz = Vec2(x, z)
         else:
             self._last_xz = None
 
@@ -453,7 +452,7 @@ class RoomMapper:
         data = np.load(Path(path).with_suffix(".npz"))
         m = cls(min_move=float(data["min_move"]))
         seg = data["seg"]
-        m._xyz = [tuple(map(float, row)) for row in data["xyz"]]
+        m._xyz = [Vec3(*map(float, row)) for row in data["xyz"]]
         m._yaw = [float(v) for v in data["yaw"]]
         m._t = [int(v) for v in data["time_ms"]]
         m._seg = [int(v) for v in seg]
@@ -461,7 +460,7 @@ class RoomMapper:
         m._kind = [_KINDS[int(v)] for v in data["kind"]]
         m._mode = m._kind[m._cur_seg]
         if m._xyz:
-            m._last_xz = (m._xyz[-1][0], m._xyz[-1][2])
+            m._last_xz = Vec2(m._xyz[-1][0], m._xyz[-1][2])
         return m
 
     @classmethod
