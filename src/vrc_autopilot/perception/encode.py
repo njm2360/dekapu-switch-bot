@@ -1,5 +1,6 @@
 import numpy as np
 
+from ..core.vec import Vec3
 from .spec import (
     BLOCK,
     CAPTURE_H,
@@ -15,9 +16,9 @@ from .spec import (
 
 def pack_pose_words(
     time_ms: int,
-    position: tuple[float, float, float],
-    forward: tuple[float, float, float],
-    up: tuple[float, float, float],
+    position: Vec3,
+    forward: Vec3,
+    up: Vec3,
 ) -> np.ndarray:
     """6DoF から 12 ワード(uint32)を組み立てる。XORチェックサムも計算する。"""
     words = np.zeros(ROWS, dtype=np.uint32)
@@ -66,9 +67,9 @@ def render_grid(
 
 def render_pose(
     time_ms: int,
-    position: tuple[float, float, float],
-    forward: tuple[float, float, float],
-    up: tuple[float, float, float],
+    position: Vec3,
+    forward: Vec3,
+    up: Vec3,
     **render_kwargs,
 ) -> np.ndarray:
     """6DoF を直接グリッド画像へエンコードするショートカット。"""

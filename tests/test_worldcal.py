@@ -516,6 +516,7 @@ def _pilot_stubs():
     import numpy as np
 
     from vrc_autopilot.core.pose import Pose
+    from vrc_autopilot.core.vec import Vec3
     from vrc_autopilot.mapping.mapper import Bounds
     from vrc_autopilot.spatial.navigation import NavGrid
 
@@ -523,9 +524,9 @@ def _pilot_stubs():
         def get_latest(self):
             return Pose(
                 time_ms=1,
-                position=(0.5, 1.6, 0.5),
-                forward=(0.0, 0.0, 1.0),
-                up=(0.0, 1.0, 0.0),
+                position=Vec3(0.5, 1.6, 0.5),
+                forward=Vec3(0.0, 0.0, 1.0),
+                up=Vec3(0.0, 1.0, 0.0),
             )
 
         def stop(self, *a, **k):

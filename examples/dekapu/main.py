@@ -1,29 +1,29 @@
 from collections.abc import Callable
 from typing import NamedTuple
 
-from vrc_autopilot import NavGrid, NavResult, Pilot, RoomMapper
+from vrc_autopilot import NavGrid, NavResult, Pilot, RoomMapper, Vec2, Vec3
 
 
 class Stop(NamedTuple):
     move: Callable[..., NavResult]  # pilot.goto / pilot.translate_to
-    goal: tuple[float, float]
-    buttons: list[tuple[float, float, float]]
+    goal: Vec2
+    buttons: list[Vec3]
 
     @property
-    def pitch_hint(self) -> tuple[float, float, float] | None:
+    def pitch_hint(self) -> Vec3 | None:
         return self.buttons[0] if self.buttons else None
 
 
 MAP = "room.npz"
 
-BTN_AUTOPLAY = (7.740, 7.405, 24.659)  # オートプレイ1h
-BTN_RLT_FAST = (7.740, 7.405, 23.488)  # ルレ高速1h
-BTN_RLT_X25 = (7.740, 6.834, 21.505)  # ルレx25
-BTN_QVPEN = (-7.740, 7.248, 18.807)  # QvPenオフ
-BTN_MEMORIAL = (-19.870, 7.404, 24.229)  # 記念アイテムオフ
+BTN_AUTOPLAY = Vec3(7.740, 7.405, 24.659)  # オートプレイ1h
+BTN_RLT_FAST = Vec3(7.740, 7.405, 23.488)  # ルレ高速1h
+BTN_RLT_X25 = Vec3(7.740, 6.834, 21.505)  # ルレx25
+BTN_QVPEN = Vec3(-7.740, 7.248, 18.807)  # QvPenオフ
+BTN_MEMORIAL = Vec3(-19.870, 7.404, 24.229)  # 記念アイテムオフ
 
-SPOT_AUTO_BUY = (6.43, 24.09)
-WEST_HUB = (-6.740, 16.716)
+SPOT_AUTO_BUY = Vec2(6.43, 24.09)
+WEST_HUB = Vec2(-6.740, 16.716)
 X25_YAW = -45.0
 QVPEN_YAW = 90.0
 MEMORIAL_YAW = 45.0
@@ -41,12 +41,12 @@ def build_route(pilot: Pilot) -> list[Stop]:
             pilot.goto,
             WEST_HUB,
             [
-                (-7.740, 7.313, 15.655),  # ログピックアップ
-                (-7.740, 7.212, 16.716),  # 効果音
-                (-7.740, 7.008, 16.716),  # 通知系サウンド
-                (-7.740, 6.812, 16.716),  # BGM
-                (-7.740, 7.212, 17.912),  # ポップアップ
-                (-7.740, 8.040, 17.912),  # 動画プレイヤー
+                Vec3(-7.740, 7.313, 15.655),  # ログピックアップ
+                Vec3(-7.740, 7.212, 16.716),  # 効果音
+                Vec3(-7.740, 7.008, 16.716),  # 通知系サウンド
+                Vec3(-7.740, 6.812, 16.716),  # BGM
+                Vec3(-7.740, 7.212, 17.912),  # ポップアップ
+                Vec3(-7.740, 8.040, 17.912),  # 動画プレイヤー
             ],
         ),
         # QvPen

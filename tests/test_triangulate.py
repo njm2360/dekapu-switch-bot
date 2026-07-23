@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from vrc_autopilot.core.pose import Pose
+from vrc_autopilot.core.vec import Vec3
 from vrc_autopilot.spatial.triangulate import (
     Sighting,
     closest_point_to_rays,
@@ -17,7 +18,7 @@ from vrc_autopilot.spatial.triangulate import (
 def sighting_towards(origin, target, label=""):
     o = np.asarray(origin, float)
     d = np.asarray(target, float) - o
-    return Sighting(origin=tuple(o), direction=tuple(d), label=label)
+    return Sighting(origin=Vec3(*o), direction=Vec3(*d), label=label)
 
 
 def test_two_rays_exact_intersection():
@@ -38,7 +39,7 @@ def test_three_rays_with_noise_are_averaged():
         d = target - np.asarray(o, float)
         d = d / np.linalg.norm(d)
         d[i % 3] += 0.01  # 各レイに少しだけ向きの誤差
-        sightings.append(Sighting(origin=o, direction=tuple(d)))
+        sightings.append(Sighting(origin=Vec3(*o), direction=Vec3(*d)))
     res = triangulate(sightings)
     assert res.n == 3
     np.testing.assert_allclose(res.point, target, atol=0.1)
@@ -47,8 +48,8 @@ def test_three_rays_with_noise_are_averaged():
 
 def test_skew_rays_midpoint_and_residual():
     # x軸方向のレイ(原点)と、(0,0,1)を通るy軸方向のレイ(ねじれの位置)
-    s1 = Sighting(origin=(0, 0, 0), direction=(1, 0, 0))
-    s2 = Sighting(origin=(0, 0, 1), direction=(0, 1, 0))
+    s1 = Sighting(origin=Vec3(0, 0, 0), direction=Vec3(1, 0, 0))
+    s2 = Sighting(origin=Vec3(0, 0, 1), direction=Vec3(0, 1, 0))
     res = triangulate([s1, s2])
     np.testing.assert_allclose(res.point, (0, 0, 0.5), atol=1e-9)
     assert res.residual_rms == pytest.approx(0.5, abs=1e-9)
@@ -56,8 +57,8 @@ def test_skew_rays_midpoint_and_residual():
 
 
 def test_parallel_rays_flagged_ill_conditioned():
-    s1 = Sighting(origin=(0, 0, 0), direction=(1, 0, 0))
-    s2 = Sighting(origin=(0, 1, 0), direction=(1, 0, 0))
+    s1 = Sighting(origin=Vec3(0, 0, 0), direction=Vec3(1, 0, 0))
+    s2 = Sighting(origin=Vec3(0, 1, 0), direction=Vec3(1, 0, 0))
     res = triangulate([s1, s2])
     assert not res.well_conditioned
     assert res.max_pair_angle_deg == pytest.approx(0.0, abs=1e-6)
@@ -75,7 +76,7 @@ def test_small_angle_flagged():
 
 def test_needs_two():
     with pytest.raises(ValueError):
-        triangulate([Sighting(origin=(0, 0, 0), direction=(0, 0, 1))])
+        triangulate([Sighting(origin=Vec3(0, 0, 0), direction=Vec3(0, 0, 1))])
     with pytest.raises(ValueError):
         closest_point_to_rays(np.zeros((1, 3)), np.array([[0, 0, 1.0]]))
 
@@ -83,23 +84,27 @@ def test_needs_two():
 def test_from_pose_uses_forward_ray():
     target = np.array([0.0, 0.0, 5.0])
     # 原点から +Z を向くポーズ
-    p1 = Pose(time_ms=1, position=(0, 0, 0), forward=(0, 0, 1.0), up=(0, 1, 0))
+    p1 = Pose(
+        time_ms=1, position=Vec3(0, 0, 0), forward=Vec3(0, 0, 1.0), up=Vec3(0, 1, 0)
+    )
     # (2,0,5) から target(=(0,0,5)) を向く => -X 方向
-    p2 = Pose(time_ms=2, position=(2, 0, 5), forward=(-1.0, 0, 0), up=(0, 1, 0))
+    p2 = Pose(
+        time_ms=2, position=Vec3(2, 0, 5), forward=Vec3(-1.0, 0, 0), up=Vec3(0, 1, 0)
+    )
     res = triangulate_poses([p1, p2])
     np.testing.assert_allclose(res.point, target, atol=1e-6)
 
 
 def test_zero_direction_rejected():
     with pytest.raises(ValueError):
-        _ = Sighting(origin=(0, 0, 0), direction=(0, 0, 0)).direction_arr
+        _ = Sighting(origin=Vec3(0, 0, 0), direction=Vec3(0, 0, 0)).direction_arr
 
 
 def test_result_to_dict():
     res = triangulate(
         [
-            Sighting(origin=(0, 0, 0), direction=(0, 0, 1)),
-            Sighting(origin=(1, 0, 0), direction=(0, 0, 1)),
+            Sighting(origin=Vec3(0, 0, 0), direction=Vec3(0, 0, 1)),
+            Sighting(origin=Vec3(1, 0, 0), direction=Vec3(0, 0, 1)),
         ]
     )
     d = res.to_dict()

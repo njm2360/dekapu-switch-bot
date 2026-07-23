@@ -13,6 +13,7 @@ from collections import deque
 
 from ..control.guidance import wrap180
 from ..core.pose import Pose
+from ..core.vec import Vec3
 from .identify import PlantModel
 
 
@@ -166,11 +167,11 @@ class SimulatedVRChat:
         yr = math.radians(self._yaw)
         pr = math.radians(self._pitch)
         cp, sp = math.cos(pr), math.sin(pr)
-        fwd = (cp * math.sin(yr), sp, cp * math.cos(yr))
-        up = (-sp * math.sin(yr), cp, -sp * math.cos(yr))
+        fwd = Vec3(cp * math.sin(yr), sp, cp * math.cos(yr))
+        up = Vec3(-sp * math.sin(yr), cp, -sp * math.cos(yr))
         return Pose(
             time_ms=self._time_ms,
-            position=(self._x, self._y, self._z),
+            position=Vec3(self._x, self._y, self._z),
             forward=fwd,
             up=up,
         )

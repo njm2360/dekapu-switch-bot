@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from vrc_autopilot.core.pose import Pose
+from vrc_autopilot.core.vec import Vec3
 from vrc_autopilot.mapping.mapper import Bounds, RoomMapper
 
 
@@ -32,7 +33,9 @@ def rectangle_path(width=4.0, depth=6.0, step=0.1, x0=1.0, z0=-2.0):
 
 
 def make_pose(x, z, y=1.6, t=0):
-    return Pose(time_ms=t, position=(x, y, z), forward=(0, 0, 1.0), up=(0, 1.0, 0))
+    return Pose(
+        time_ms=t, position=Vec3(x, y, z), forward=Vec3(0, 0, 1.0), up=Vec3(0, 1.0, 0)
+    )
 
 
 def _line(m, a, b, step=0.05):

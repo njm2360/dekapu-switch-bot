@@ -2,6 +2,7 @@ from vrc_autopilot.control.controller import ControlTuning
 from vrc_autopilot.control.maneuvers import AimResult, NavResult
 from vrc_autopilot.control.pilot import ActivateResult, ClickAtResult, Pilot
 from vrc_autopilot.core.pose import Pose
+from vrc_autopilot.core.vec import Vec2, Vec3
 from vrc_autopilot.mapping.mapper import RoomMapper
 from vrc_autopilot.spatial.navigation import NavGrid, Path
 
@@ -16,4 +17,6 @@ __all__ = [
     "Pilot",
     "Pose",
     "RoomMapper",
+    "Vec2",
+    "Vec3",
 ]

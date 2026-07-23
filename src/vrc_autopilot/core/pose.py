@@ -9,15 +9,17 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .vec import Vec3
+
 
 @dataclass(frozen=True)
 class Pose:
     """復元された 6DoF ポーズ(Unity座標系: Y-up, 左手系, 単位メートル)。"""
 
     time_ms: int  # _VRChatTimeNetworkMs (ラップあり)
-    position: tuple[float, float, float]
-    forward: tuple[float, float, float]
-    up: tuple[float, float, float]
+    position: Vec3
+    forward: Vec3
+    up: Vec3
 
     @property
     def yaw_deg(self) -> float:

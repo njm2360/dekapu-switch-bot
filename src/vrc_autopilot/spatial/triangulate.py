@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..core.pose import Pose
+from ..core.vec import Vec3
 
 
 def _normalize(v: np.ndarray) -> np.ndarray:
@@ -17,8 +18,8 @@ def _normalize(v: np.ndarray) -> np.ndarray:
 class Sighting:
     """1地点からの視線レイ(原点+正規化方向)と付随情報。"""
 
-    origin: tuple[float, float, float]
-    direction: tuple[float, float, float]
+    origin: Vec3
+    direction: Vec3
     label: str = ""
     time_ms: int = 0
 
@@ -27,8 +28,8 @@ class Sighting:
         """Pose の位置=原点・forward=方向としてレイを作る。"""
         d = _normalize(np.asarray(pose.forward, dtype=np.float64))
         return cls(
-            origin=tuple(float(v) for v in pose.position),
-            direction=tuple(float(v) for v in d),
+            origin=pose.position,
+            direction=Vec3(*(float(v) for v in d)),
             label=label,
             time_ms=pose.time_ms,
         )
@@ -44,7 +45,7 @@ class Sighting:
 
 @dataclass(frozen=True)
 class TriangulationResult:
-    point: tuple[float, float, float]  # 推定ボタン座標 [m]
+    point: Vec3  # 推定ボタン座標 [m]
     residual_rms: float  # 各レイへの垂直距離のRMS [m]
     ray_distances: tuple[float, ...]  # 各レイへの垂直距離 [m]
     n: int  # 使用レイ数
@@ -54,7 +55,7 @@ class TriangulationResult:
 
     def to_dict(self) -> dict:
         return {
-            "point": {"x": self.point[0], "y": self.point[1], "z": self.point[2]},
+            "point": {"x": self.point.x, "y": self.point.y, "z": self.point.z},
             "residual_rms_m": self.residual_rms,
             "ray_distances_m": list(self.ray_distances),
             "n": self.n,
@@ -116,7 +117,7 @@ def triangulate(
     well = angle >= min_angle_deg and np.isfinite(cond)
 
     return TriangulationResult(
-        point=(float(p[0]), float(p[1]), float(p[2])),
+        point=Vec3(float(p[0]), float(p[1]), float(p[2])),
         residual_rms=rms,
         ray_distances=tuple(float(d) for d in dists),
         n=len(sightings),

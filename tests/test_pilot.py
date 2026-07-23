@@ -29,6 +29,7 @@ from vrc_autopilot.control.maneuvers import (
 from vrc_autopilot.control.pilot import Pilot
 from vrc_autopilot.control.recording import AxisMetrics
 from vrc_autopilot.core.pose import Pose
+from vrc_autopilot.core.vec import Vec2, Vec3
 from vrc_autopilot.mapping.mapper import Bounds
 from vrc_autopilot.spatial.navigation import NavGrid
 
@@ -38,8 +39,8 @@ def _pose(t: int, pos, yaw_deg: float = 0.0, pitch_deg: float = 0.0) -> Pose:
     y = math.radians(yaw_deg)
     p = math.radians(pitch_deg)
     cp = math.cos(p)
-    fwd = (cp * math.sin(y), math.sin(p), cp * math.cos(y))
-    return Pose(time_ms=t, position=tuple(pos), forward=fwd, up=(0.0, 1.0, 0.0))
+    fwd = Vec3(cp * math.sin(y), math.sin(p), cp * math.cos(y))
+    return Pose(time_ms=t, position=Vec3(*pos), forward=fwd, up=Vec3(0.0, 1.0, 0.0))
 
 
 class FakeReader:
@@ -97,7 +98,7 @@ def test_follow_path_arrives_when_already_at_goal():
     reader = FakeReader([_pose(1, (0.0, 1.6, 2.0))])  # 最終WPの上に立っている
     look, move = RecActuator(), RecActuator()
     res = follow_path(
-        reader, look, move, [(0.0, 0.0), (0.0, 2.0)], g, nav_controllers(g)
+        reader, look, move, [Vec2(0.0, 0.0), Vec2(0.0, 2.0)], g, nav_controllers(g)
     )
     assert res.arrived and res.reason == "arrived"
     assert move.stops == 1 and look.stops == 1  # 終了時に必ず停止
@@ -116,7 +117,7 @@ def test_follow_path_scripted_walk_records_and_commands():
         reader,
         look,
         move,
-        [(0.0, 0.0), (0.0, 1.0), (0.0, 2.0)],
+        [Vec2(0.0, 0.0), Vec2(0.0, 1.0), Vec2(0.0, 2.0)],
         g,
         nav_controllers(g),
         recorder=rec,
@@ -143,7 +144,7 @@ def test_follow_path_pitch_free_by_default():
     reader = FakeReader(poses)
     look, move = RecActuator(), RecActuator()
     res = follow_path(
-        reader, look, move, [(0.0, 0.0), (0.0, 2.0)], g, nav_controllers(g)
+        reader, look, move, [Vec2(0.0, 0.0), Vec2(0.0, 2.0)], g, nav_controllers(g)
     )
     assert res.arrived
     assert all(pitch == 0.0 for _, pitch in look.looks)  # pitch 軸は触らない
@@ -162,10 +163,10 @@ def test_follow_path_pitch_target_commands_pitch_up_for_high_target():
         reader,
         look,
         move,
-        [(0.0, 0.0), (0.0, 2.0)],
+        [Vec2(0.0, 0.0), Vec2(0.0, 2.0)],
         g,
         nav_controllers(g),
-        pitch_target=(0.0, 4.0, 3.0),
+        pitch_target=Vec3(0.0, 4.0, 3.0),
         recorder=rec,
     )
     assert res.arrived
@@ -185,10 +186,10 @@ def test_follow_path_translate_pitch_target_commands_pitch_without_yaw():
         reader,
         look,
         move,
-        [(0.0, 0.0), (0.0, 2.0)],
+        [Vec2(0.0, 0.0), Vec2(0.0, 2.0)],
         g,
         translate_controllers(g),
-        pitch_target=(0.0, 4.0, 3.0),
+        pitch_target=Vec3(0.0, 4.0, 3.0),
         recorder=rec,
     )
     assert all(turn == 0.0 for turn, _ in look.looks)  # yaw は回さない
@@ -203,7 +204,7 @@ def test_aim_at_converges_when_aligned():
     aligned = [_pose(i + 1, (0.0, 1.0, 0.0)) for i in range(5)]
     reader = FakeReader(aligned)
     look = RecActuator()
-    res = aim_at(reader, look, (0.0, 1.0, 5.0), g, face_controllers(g))
+    res = aim_at(reader, look, Vec3(0.0, 1.0, 5.0), g, face_controllers(g))
     assert res.converged
     assert abs(res.yaw_err) < g.face_tol and abs(res.pitch_err) < g.face_tol
     assert look.stops == 1
@@ -253,7 +254,7 @@ def test_strafe_align_converges_when_on_line():
         FakeReader(poses),
         look,
         move,
-        (0.0, 1.0, 5.0),
+        Vec3(0.0, 1.0, 5.0),
         g,
         face_controllers(g),
         strafe_controller(g),
@@ -271,7 +272,7 @@ def test_strafe_align_strafes_toward_error_side():
         FakeReader(poses),
         look,
         move,
-        (0.3, 1.0, 3.0),  # 横ずれ ≈ +0.3m
+        Vec3(0.3, 1.0, 3.0),  # 横ずれ ≈ +0.3m
         g,
         face_controllers(g),
         strafe_controller(g),
@@ -302,7 +303,7 @@ def test_strafe_align_stuck_abort():
         FrozenReader(),
         look,
         move,
-        (0.5, 1.0, 3.0),
+        Vec3(0.5, 1.0, 3.0),
         g,
         face_controllers(g),
         strafe_controller(g),
@@ -347,7 +348,7 @@ def test_hold_view_moves_forward_when_target_ahead():
         FakeReader(poses),
         look,
         move,
-        [(0.0, 0.0), (0.0, 2.0)],
+        [Vec2(0.0, 0.0), Vec2(0.0, 2.0)],
         g,
         translate_controllers(g),
     )
@@ -366,7 +367,7 @@ def test_pilot_translate_to_reaches_holding_view():
         move,
         grid=_grid(np.ones((10, 10), bool)),
     )
-    res = pilot.translate_to((0.5, 0.5))
+    res = pilot.translate_to(Vec2(0.5, 0.5))
     assert res.path_found and res.arrived
     assert all(t == 0.0 and p == 0.0 for t, p in look.looks)  # 視点固定
 
@@ -410,7 +411,7 @@ def test_follow_path_exposes_yaw_metrics():
         FakeReader(poses),
         RecActuator(),
         RecActuator(),
-        [(0.0, 0.0), (0.0, 1.0), (0.0, 2.0)],
+        [Vec2(0.0, 0.0), Vec2(0.0, 1.0), Vec2(0.0, 2.0)],
         g,
         nav_controllers(g),
         recorder=ListRec(),
@@ -441,7 +442,7 @@ def test_pilot_goto_no_pose():
         RecActuator(),
         grid=_grid(np.ones((10, 10), bool)),
     )
-    res = pilot.goto((0.5, 0.5))
+    res = pilot.goto(Vec2(0.5, 0.5))
     assert not res.path_found and res.reason == "no_pose"
 
 
@@ -453,7 +454,7 @@ def test_pilot_goto_unreachable():
         RecActuator(),
         grid=_grid(np.zeros((10, 10), bool)),
     )
-    res = pilot.goto((0.9, 0.9))
+    res = pilot.goto(Vec2(0.9, 0.9))
     assert not res.path_found and res.reason == "unreachable"
 
 
@@ -466,8 +467,10 @@ def test_pilot_standoff_point_is_in_front_of_button():
         RecActuator(),
         grid=_grid(np.ones((10, 10), bool)),
     )
-    assert pilot.standoff_point((0.5, 1.0, 0.5), 90.0, 0.2) == pytest.approx((0.7, 0.5))
-    assert pilot.standoff_point((0.5, 1.0, 0.5), 180.0, 0.3) == pytest.approx(
+    assert pilot.standoff_point(Vec3(0.5, 1.0, 0.5), 90.0, 0.2) == pytest.approx(
+        (0.7, 0.5)
+    )
+    assert pilot.standoff_point(Vec3(0.5, 1.0, 0.5), 180.0, 0.3) == pytest.approx(
         (0.5, 0.2)
     )  # -Z 向きの正面
 
@@ -479,7 +482,7 @@ def test_pilot_standoff_zero_targets_button_xz():
         RecActuator(),
         grid=_grid(np.ones((10, 10), bool)),
     )
-    assert pilot.standoff_point((0.9, 1.0, 0.5), 90.0, 0.0) == (0.9, 0.5)
+    assert pilot.standoff_point(Vec3(0.9, 1.0, 0.5), 90.0, 0.0) == (0.9, 0.5)
 
 
 def test_pilot_standoff_default_uses_gains():
@@ -491,7 +494,7 @@ def test_pilot_standoff_default_uses_gains():
         grid=_grid(np.ones((10, 10), bool)),
         gains=g,
     )
-    assert pilot.standoff_point((0.5, 1.0, 0.5), 90.0) == pytest.approx((0.7, 0.5))
+    assert pilot.standoff_point(Vec3(0.5, 1.0, 0.5), 90.0) == pytest.approx((0.7, 0.5))
 
 
 class FakeInteract:
@@ -527,78 +530,80 @@ def test_pilot_state_queries():
     assert p.yaw() == pytest.approx(90.0)
     assert p.pitch() == pytest.approx(0.0)
     # (x,z) と (x,y,z) のどちらでも受ける
-    assert p.distance_to((0.9, 0.5)) == pytest.approx(0.4)
-    assert p.distance_to((0.9, 1.0, 0.5)) == pytest.approx(0.4)
-    assert p.is_near((0.9, 0.5), 0.5) and not p.is_near((0.9, 0.5), 0.3)
-    assert p.bearing_to((0.9, 0.5)) == pytest.approx(90.0)  # +X 方向
-    assert p.yaw_error_to((0.9, 0.5)) == pytest.approx(0.0)  # 既に +X を向いている
-    assert p.yaw_error_to((0.5, 0.9)) == pytest.approx(-90.0)  # +Z は左90°
+    assert p.distance_to(Vec2(0.9, 0.5)) == pytest.approx(0.4)
+    assert p.distance_to(Vec3(0.9, 1.0, 0.5)) == pytest.approx(0.4)
+    assert p.is_near(Vec2(0.9, 0.5), 0.5) and not p.is_near(Vec2(0.9, 0.5), 0.3)
+    assert p.bearing_to(Vec2(0.9, 0.5)) == pytest.approx(90.0)  # +X 方向
+    assert p.yaw_error_to(Vec2(0.9, 0.5)) == pytest.approx(0.0)  # 既に +X を向いている
+    assert p.yaw_error_to(Vec2(0.5, 0.9)) == pytest.approx(-90.0)  # +Z は左90°
 
 
 def test_pilot_state_queries_no_pose():
     p = _pilot(poses=[])
     assert p.pose() is None and p.position() is None and p.xz() is None
-    assert p.yaw() is None and p.distance_to((0.5, 0.5)) is None
-    assert not p.is_near((0.5, 0.5), 10.0)
-    assert p.bearing_to((0.5, 0.5)) is None and p.yaw_error_to((0.5, 0.5)) is None
-    assert p.face_yaw_to((0.5, 0.5)) is None
+    assert p.yaw() is None and p.distance_to(Vec2(0.5, 0.5)) is None
+    assert not p.is_near(Vec2(0.5, 0.5), 10.0)
+    assert (
+        p.bearing_to(Vec2(0.5, 0.5)) is None and p.yaw_error_to(Vec2(0.5, 0.5)) is None
+    )
+    assert p.face_yaw_to(Vec2(0.5, 0.5)) is None
     assert p.stats() is None  # FakeReader は統計未対応
 
 
 def test_pilot_face_yaw_to_points_back_at_current_side():
     # 現在地(0.5,0.5)から見てボタン(0.5,*,0.9)の手前側は -Z 方向 → face_yaw=180°
     p = _pilot(poses=[_pose(1, (0.5, 1.6, 0.5))])
-    yaw = p.face_yaw_to((0.5, 1.0, 0.9))
+    yaw = p.face_yaw_to(Vec3(0.5, 1.0, 0.9))
     assert abs(yaw) == pytest.approx(180.0)
     # その face_yaw で standoff すると現在地側の正面に立つ
-    sx, sz = p.standoff_point((0.5, 1.0, 0.9), yaw, 0.4)
+    sx, sz = p.standoff_point(Vec3(0.5, 1.0, 0.9), yaw, 0.4)
     assert (sx, sz) == pytest.approx((0.5, 0.5))
 
 
 def test_pilot_pitch_error_to():
     # 同じ高さ正面 → 誤差0。上方 → 正(上を向く必要)
     p = _pilot(poses=[_pose(1, (0.0, 1.0, 0.0))])
-    assert p.pitch_error_to((0.0, 1.0, 5.0)) == pytest.approx(0.0)
-    assert p.pitch_error_to((0.0, 3.0, 5.0)) > 0.0
+    assert p.pitch_error_to(Vec3(0.0, 1.0, 5.0)) == pytest.approx(0.0)
+    assert p.pitch_error_to(Vec3(0.0, 3.0, 5.0)) > 0.0
 
 
 # ---- マップ切替 ----------------------------------------------------------
 def test_pilot_use_grid_switches_active_map():
     # 全面 free で開始 → can_reach True。全面ブロックの階へ差し替えると False
     p = _pilot(free=np.ones((10, 10), bool), poses=[_pose(1, (0.5, 1.6, 0.5))])
-    assert p.can_reach((0.85, 0.85))
+    assert p.can_reach(Vec2(0.85, 0.85))
     blocked = _grid(np.zeros((10, 10), bool))
     p.use_grid(blocked)
     assert p.grid is blocked
-    assert not p.can_reach((0.85, 0.85))  # 差し替え後は新しい階で計画する
+    assert not p.can_reach(Vec2(0.85, 0.85))  # 差し替え後は新しい階で計画する
 
 
 # ---- dry-run 経路計画 ----------------------------------------------------
 def test_pilot_plan_without_moving():
     p = _pilot(poses=[_pose(1, (0.15, 1.6, 0.15))])
-    path = p.plan((0.85, 0.85))
+    path = p.plan(Vec2(0.85, 0.85))
     assert path is not None and path.length > 0.0
-    assert p.can_reach((0.85, 0.85))
-    assert p.path_length((0.85, 0.85)) == pytest.approx(path.length)
+    assert p.can_reach(Vec2(0.85, 0.85))
+    assert p.path_length(Vec2(0.85, 0.85)) == pytest.approx(path.length)
 
 
 def test_pilot_plan_no_pose_returns_none():
     p = _pilot(poses=[])
-    assert p.plan((0.5, 0.5)) is None
-    assert not p.can_reach((0.5, 0.5))
-    assert p.path_length((0.5, 0.5)) is None
+    assert p.plan(Vec2(0.5, 0.5)) is None
+    assert not p.can_reach(Vec2(0.5, 0.5))
+    assert p.path_length(Vec2(0.5, 0.5)) is None
 
 
 def test_pilot_can_reach_false_on_unreachable_and_out_of_bounds():
     p = _pilot(free=np.zeros((10, 10), bool), poses=[_pose(1, (0.5, 1.6, 0.5))])
-    assert not p.can_reach((0.9, 0.9))  # free 無し
+    assert not p.can_reach(Vec2(0.9, 0.9))  # free 無し
     p2 = _pilot(poses=[_pose(1, (0.5, 1.6, 0.5))])
-    assert not p2.can_reach((5.0, 5.0))  # マップ範囲外(ValueError を吸収)
+    assert not p2.can_reach(Vec2(5.0, 5.0))  # マップ範囲外(ValueError を吸収)
 
 
 def test_pilot_plan_with_explicit_start_needs_no_pose():
     p = _pilot(poses=[])
-    assert p.plan((0.85, 0.85), start=(0.15, 0.15)) is not None
+    assert p.plan(Vec2(0.85, 0.85), start=Vec2(0.15, 0.15)) is not None
 
 
 # ---- grid 省略(照準・押下だけ使う) -------------------------------------
@@ -610,9 +615,9 @@ def test_pilot_without_grid_planning_raises():
     # grid 未設定なら経路計画系は RuntimeError
     p = _gridless(poses=[_pose(1, (0.5, 1.6, 0.5))])
     for call in (
-        lambda: p.plan((0.5, 0.5)),
-        lambda: p.goto((0.5, 0.5)),
-        lambda: p.translate_to((0.5, 0.5)),
+        lambda: p.plan(Vec2(0.5, 0.5)),
+        lambda: p.goto(Vec2(0.5, 0.5)),
+        lambda: p.translate_to(Vec2(0.5, 0.5)),
     ):
         with pytest.raises(RuntimeError):
             call()
@@ -622,16 +627,16 @@ def test_pilot_without_grid_state_queries_work():
     # grid 無しでも状態クエリ・ヘルパは動く
     p = _gridless(poses=[_pose(1, (0.5, 1.6, 0.5), yaw_deg=90.0)])
     assert p.xz() == (0.5, 0.5)
-    assert p.bearing_to((0.9, 0.5)) == pytest.approx(90.0)
+    assert p.bearing_to(Vec2(0.9, 0.5)) == pytest.approx(90.0)
 
 
 def test_pilot_use_grid_enables_planning():
     # 後から use_grid() で入れれば計画できる
     p = _gridless(poses=[_pose(1, (0.15, 1.6, 0.15))])
     with pytest.raises(RuntimeError):
-        p.plan((0.85, 0.85))
+        p.plan(Vec2(0.85, 0.85))
     p.use_grid(_grid(np.ones((10, 10), bool)))
-    assert p.plan((0.85, 0.85)) is not None
+    assert p.plan(Vec2(0.85, 0.85)) is not None
 
 
 # ---- interact(押下) -----------------------------------------------------
@@ -656,7 +661,7 @@ def test_pilot_click_at_clicks_when_converged():
     it = FakeInteract()
     poses = [_pose(i + 1, (0.0, 1.0, 0.0)) for i in range(6)]
     p = _pilot(poses=poses, interact=it, gains=g)
-    res = p.click_at((0.0, 1.0, 5.0))
+    res = p.click_at(Vec3(0.0, 1.0, 5.0))
     assert res.clicked and res.reason == "clicked"
     assert it.clicks == 1
 
@@ -684,7 +689,7 @@ def test_pilot_click_at_skips_when_not_converged():
         interact=it,
         gains=g,
     )
-    res = p.click_at((0.0, 1.0, 5.0))
+    res = p.click_at(Vec3(0.0, 1.0, 5.0))
     assert not res.clicked and res.reason == "timeout"
     assert it.clicks == 0
 
@@ -695,7 +700,7 @@ def test_pilot_activate_full_sequence():
     it = FakeInteract()
     poses = [_pose(i + 1, (0.5, 1.6, 0.5)) for i in range(8)]
     p = _pilot(poses=poses, interact=it, gains=g)
-    res = p.activate((0.5, 1.6, 0.9), 180.0, standoff=0.4)
+    res = p.activate(Vec3(0.5, 1.6, 0.9), 180.0, standoff=0.4)
     assert res.nav.arrived and res.clicked and res.reason == "clicked"
     assert it.clicks == 1
 
@@ -705,7 +710,7 @@ def test_pilot_cancel_cancels_goto():
     poses = [_pose(i + 1, (0.15, 1.6, 0.15)) for i in range(10)]
     p = _pilot(poses=poses)
     p.cancel()
-    res = p.goto((0.85, 0.85))
+    res = p.goto(Vec2(0.85, 0.85))
     assert res.path_found and not res.arrived and res.reason == "cancelled"
     p.resume()
     assert not p.cancelled
@@ -715,7 +720,7 @@ def test_pilot_cancel_cancels_aim():
     poses = [_pose(i + 1, (0.0, 1.0, 0.0), yaw_deg=90.0) for i in range(10)]
     p = _pilot(poses=poses)
     p.cancel()
-    res = p.aim((0.0, 1.0, 5.0))
+    res = p.aim(Vec3(0.0, 1.0, 5.0))
     assert not res.converged and res.reason == "cancelled"
 
 
@@ -736,8 +741,8 @@ def test_pilot_move_for_commands_then_stops():
 # ---- 待機系 --------------------------------------------------------------
 def test_pilot_wait_until_near_immediate():
     p = _pilot(poses=[_pose(1, (0.5, 1.6, 0.5))])
-    assert p.wait_until_near((0.5, 0.5), 0.1, timeout=0.2)
-    assert not p.wait_until_near((0.9, 0.9), 0.1, timeout=0.1)
+    assert p.wait_until_near(Vec2(0.5, 0.5), 0.1, timeout=0.2)
+    assert not p.wait_until_near(Vec2(0.9, 0.9), 0.1, timeout=0.1)
 
 
 def test_pilot_is_hud_alive_detects_fresh_and_stale():
@@ -756,5 +761,5 @@ def test_pilot_is_usable_without_hardware_imports():
         grid=_grid(np.ones((10, 10), bool)),
     )
     assert pilot._owns_io is False
-    res = pilot.goto((0.5, 0.5))  # start≈goal なのですぐ到達
+    res = pilot.goto(Vec2(0.5, 0.5))  # start≈goal なのですぐ到達
     assert res.path_found

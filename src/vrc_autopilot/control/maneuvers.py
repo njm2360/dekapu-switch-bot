@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from ..core.pose import Pose
+from ..core.vec import Vec2, Vec3
 from ..spatial.navigation import Path
 from .actuator import LookActuator, MoveActuator
 from .controller import (
@@ -39,21 +40,17 @@ class Clock(Protocol):
     def sleep(self, seconds: float) -> None: ...
 
 
-def _dist(a: tuple[float, float], b: tuple[float, float]) -> float:
-    return math.hypot(a[0] - b[0], a[1] - b[1])
-
-
-def _cum_arclen(wps: list[tuple[float, float]]) -> list[float]:
+def _cum_arclen(wps: list[Vec2]) -> list[float]:
     """ポリラインの累積弧長(cum[0]=0、cum[-1]=全長)。"""
     cum = [0.0]
     for i in range(len(wps) - 1):
-        cum.append(cum[-1] + _dist(wps[i], wps[i + 1]))
+        cum.append(cum[-1] + wps[i].dist(wps[i + 1]))
     return cum
 
 
 def _project_arclen(
-    cur: tuple[float, float],
-    wps: list[tuple[float, float]],
+    cur: Vec2,
+    wps: list[Vec2],
     cum: list[float],
     hint: int,
 ) -> tuple[int, float]:
@@ -65,23 +62,19 @@ def _project_arclen(
     best_d: float | None = None
     best_i, best_s = max(0, min(hint, len(wps) - 2)), cum[-1]
     for i in range(max(0, hint), len(wps) - 1):
-        ax, az = wps[i]
-        bx, bz = wps[i + 1]
-        dx, dz = bx - ax, bz - az
-        l2 = dx * dx + dz * dz
+        a, b = wps[i], wps[i + 1]
+        seg = b - a
+        l2 = seg.dot(seg)
         if l2 <= 1e-12:
             continue
-        t = ((cur[0] - ax) * dx + (cur[1] - az) * dz) / l2
-        t = max(0.0, min(1.0, t))
-        d = math.hypot(cur[0] - (ax + t * dx), cur[1] - (az + t * dz))
+        t = max(0.0, min(1.0, (cur - a).dot(seg) / l2))
+        d = cur.dist(a + seg * t)
         if best_d is None or d < best_d:
             best_d, best_i, best_s = d, i, cum[i] + t * math.sqrt(l2)
     return best_i, best_s
 
 
-def _point_at_arclen(
-    wps: list[tuple[float, float]], cum: list[float], s: float
-) -> tuple[float, float]:
+def _point_at_arclen(wps: list[Vec2], cum: list[float], s: float) -> Vec2:
     """弧長 s の位置の点(範囲外は端点でクランプ)。"""
     if s <= 0.0:
         return wps[0]
@@ -93,10 +86,7 @@ def _point_at_arclen(
             if seg <= 1e-12:
                 return wps[i + 1]
             t = (s - cum[i]) / seg
-            return (
-                wps[i][0] + t * (wps[i + 1][0] - wps[i][0]),
-                wps[i][1] + t * (wps[i + 1][1] - wps[i][1]),
-            )
+            return wps[i] + (wps[i + 1] - wps[i]) * t
     return wps[-1]
 
 
@@ -153,11 +143,11 @@ def follow_path(
     reader: PoseSource,
     look: LookActuator,
     move: MoveActuator,
-    waypoints: list[tuple[float, float]],
+    waypoints: list[Vec2],
     gains: ControlTuning,
     nav: NavControllers,
     *,
-    pitch_target: tuple[float, float, float] | None = None,
+    pitch_target: Vec3 | None = None,
     clock: Clock = time,
     recorder: Recorder | None = None,
     cancel: threading.Event | None = None,
@@ -192,10 +182,10 @@ def follow_path(
                 break
             last_t, last_time = pose.time_ms, now
             frames += 1
-            cur = (pose.position[0], pose.position[2])
+            cur = pose.position.xz
 
             seg, s_proj = _project_arclen(cur, wps, cum, seg)
-            end_dist = _dist(cur, wps[-1])
+            end_dist = cur.dist(wps[-1])
             if total - s_proj < gains.arrive_radius and end_dist < gains.arrive_radius:
                 break
             carrot_s = s_proj + gains.nav_lookahead
@@ -287,11 +277,11 @@ def follow_path_translate(
     reader: PoseSource,
     look: LookActuator,
     move: MoveActuator,
-    waypoints: list[tuple[float, float]],
+    waypoints: list[Vec2],
     gains: ControlTuning,
     ctl: TranslateControllers,
     *,
-    pitch_target: tuple[float, float, float] | None = None,
+    pitch_target: Vec3 | None = None,
     clock: Clock = time,
     recorder: Recorder | None = None,
     cancel: threading.Event | None = None,
@@ -323,10 +313,10 @@ def follow_path_translate(
                 break
             last_t, last_time = pose.time_ms, now
             frames += 1
-            cur = (pose.position[0], pose.position[2])
+            cur = pose.position.xz
 
             prev_idx = idx
-            while idx < len(wps) - 1 and _dist(cur, wps[idx]) < gains.arrive_radius:
+            while idx < len(wps) - 1 and cur.dist(wps[idx]) < gains.arrive_radius:
                 idx += 1
             if idx != prev_idx:
                 # 目標切替で誤差が跳ねたときの微分キックを防ぐ
@@ -334,12 +324,12 @@ def follow_path_translate(
                 ctl.strafe.reset_derivative()
             target = wps[idx]
             final = idx == len(wps) - 1
-            dist = _dist(cur, target)
+            dist = cur.dist(target)
             if final and dist < gains.arrive_radius:
                 break
 
             # 世界系の目標誤差を体の前/右方向へ射影
-            ex, ez = target[0] - cur[0], target[1] - cur[1]
+            ex, ez = target - cur
             yr = math.radians(pose.yaw_deg)
             fwd_err = ex * math.sin(yr) + ez * math.cos(yr)
             right_err = ex * math.cos(yr) - ez * math.sin(yr)
@@ -537,7 +527,7 @@ def strafe_align(
     reader: PoseSource,
     look: LookActuator,
     move: MoveActuator,
-    target_xyz: tuple[float, float, float],
+    target_xyz: Vec3,
     gains: ControlTuning,
     face: FaceControllers,
     strafe: AxisController,
@@ -560,7 +550,7 @@ def strafe_align(
     track = not isinstance(rec, NullRecorder)
     face.pitch.reset()
     strafe.reset()
-    tgt_xz = (target_xyz[0], target_xyz[2])
+    tgt_xz = target_xyz.xz
     last_t: int | None = None
     last_time = t0 = clock.monotonic()
     frames = 0
@@ -572,7 +562,7 @@ def strafe_align(
     pitch_acc = AxisAccumulator() if track else None
     # スタック検出は窓内の移動経路長Σ|Δpos|で見る(その場往復や微速移動を誤判定しない)
     win_t = t0
-    win_prev: tuple[float, float] | None = None
+    win_prev: Vec2 | None = None
     win_path = 0.0
     win_commanded = False
     try:
@@ -587,7 +577,7 @@ def strafe_align(
                 break
             last_t, last_time = pose.time_ms, now
             frames += 1
-            cur = (pose.position[0], pose.position[2])
+            cur = pose.position.xz
             yaw_err, dist = heading_error(cur, pose.yaw_deg, tgt_xz)
             lat_err = dist * math.sin(math.radians(yaw_err))  # +なら目標が右
             pitch_err = pitch_error(pose.position, pose.forward, target_xyz)
@@ -610,7 +600,7 @@ def strafe_align(
             if win_prev is None:
                 win_t, win_prev = now, cur
             else:
-                win_path += _dist(cur, win_prev)
+                win_path += cur.dist(win_prev)
                 win_prev = cur
             win_commanded = win_commanded or abs(strafe_cmd) > 1e-3
             if now - win_t >= gains.align_stuck_time:
@@ -680,7 +670,7 @@ def strafe_align(
 def aim_at(
     reader: PoseSource,
     look: LookActuator,
-    target_xyz: tuple[float, float, float],
+    target_xyz: Vec3,
     gains: ControlTuning,
     face: FaceControllers,
     *,
@@ -688,10 +678,10 @@ def aim_at(
     recorder: Recorder | None = None,
     cancel: threading.Event | None = None,
 ) -> AimResult:
-    tgt_xz = (target_xyz[0], target_xyz[2])
+    tgt_xz = target_xyz.xz
 
     def errors(pose: Pose) -> tuple[float, float]:
-        cur = (pose.position[0], pose.position[2])
+        cur = pose.position.xz
         yaw_err, _ = heading_error(cur, pose.yaw_deg, tgt_xz)
         return yaw_err, pitch_error(pose.position, pose.forward, target_xyz)
 

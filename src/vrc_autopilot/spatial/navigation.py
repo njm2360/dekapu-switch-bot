@@ -20,6 +20,7 @@ from scipy.ndimage import (
     label,
 )
 
+from ..core.vec import Vec2
 from ..mapping.mapper import Bounds, RoomMapper
 
 log = logging.getLogger(__name__)
@@ -62,10 +63,10 @@ class NavGrid:
         rows, cols = self.free.shape
         return (min(max(row, 0), rows - 1), min(max(col, 0), cols - 1))
 
-    def cell_to_world(self, row: int, col: int) -> tuple[float, float]:
+    def cell_to_world(self, row: int, col: int) -> Vec2:
         x = self.bounds.xmin + (col + 0.5) * self.cell
         z = self.bounds.zmin + (row + 0.5) * self.cell
-        return (x, z)
+        return Vec2(x, z)
 
     def is_free(self, row: int, col: int) -> bool:
         rows, cols = self.free.shape
@@ -305,16 +306,16 @@ def _los_simplify(
 class Path:
     """計画された経路。"""
 
-    waypoints: list[tuple[float, float]]  # XZ [m] の経由点列(start→goal付近)
+    waypoints: list[Vec2]  # XZ [m] の経由点列(start→goal付近)
     length: float  # 総距離 [m]
-    snapped_goal_xz: tuple[float, float]  # 実際に到達するゴール寄りセルのXZ
+    snapped_goal_xz: Vec2  # 実際に到達するゴール寄りセルのXZ
     goal_blocked: bool  # 目標が壁または到達不能な孤立領域で、最寄りの床に迂回したか
 
 
 def plan_path(
     grid: NavGrid,
-    start_xz: tuple[float, float],
-    goal_xz: tuple[float, float],
+    start_xz: Vec2,
+    goal_xz: Vec2,
     *,
     margin: float = 0.3,
     margin_weight: float = 6.0,
@@ -357,8 +358,7 @@ def plan_path(
         nf = grid.nearest_free(*gc, within=comp == start_comp)
         if nf is None:
             return None
-        nx, nz = grid.cell_to_world(*nf)
-        if math.hypot(nx - goal_xz[0], nz - goal_xz[1]) > max_goal_divert:
+        if grid.cell_to_world(*nf).dist(goal_xz) > max_goal_divert:
             return None  # 壁際のずれではなく、到達できない領域の目標
         gc = nf
 
@@ -379,7 +379,7 @@ def plan_path(
 
     length = 0.0
     for a, b in pairwise(waypoints):
-        length += math.hypot(b[0] - a[0], b[1] - a[1])
+        length += a.dist(b)
     return Path(
         waypoints=waypoints,
         length=length,
