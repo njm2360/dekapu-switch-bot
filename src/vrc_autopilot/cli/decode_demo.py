@@ -1,5 +1,7 @@
 """VRChat PoseTelemetryHUD を読み続けてポーズを表示する CLI デモ(--stats で統計も)。"""
 
+from __future__ import annotations
+
 import argparse
 import time
 

@@ -4,6 +4,8 @@
 元の特性(静特性カーブ・むだ時間)と一致することを実機なしで検証する。
 """
 
+from __future__ import annotations
+
 import math
 
 import numpy as np

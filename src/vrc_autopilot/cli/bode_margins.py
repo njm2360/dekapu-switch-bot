@@ -4,6 +4,8 @@
 ボード線図PNGを保存する。ゲインは ControlTuning の既定値を使う
 """
 
+from __future__ import annotations
+
 import argparse
 import math
 from pathlib import Path

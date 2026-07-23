@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from vrc_autopilot.control.controller import ControlTuning
 from vrc_autopilot.control.maneuvers import AimResult, NavResult
 from vrc_autopilot.control.pilot import ActivateResult, ClickAtResult, Pilot

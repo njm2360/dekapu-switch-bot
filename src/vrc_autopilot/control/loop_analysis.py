@@ -8,6 +8,8 @@ ControlTuning と同定プラント(PlantModel)から各ループの開ループ
 C は離散PID、K は静特性の傾き×(1-不感帯補償)、Td はむだ時間、T はフレーム周期
 """
 
+from __future__ import annotations
+
 import math
 from dataclasses import dataclass
 

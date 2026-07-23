@@ -6,6 +6,8 @@
 最終照準。経路計画やフェーズの連結は pilot.Pilot が担う。
 """
 
+from __future__ import annotations
+
 import logging
 import math
 import threading

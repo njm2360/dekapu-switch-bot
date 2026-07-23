@@ -4,6 +4,8 @@
 軌跡・現在位置・目標点。rawvideo を ffmpeg に直接パイプして mp4 を書く。
 """
 
+from __future__ import annotations
+
 import argparse
 import csv
 import math
@@ -75,7 +77,7 @@ def load_frames(path: Path) -> dict[str, np.ndarray]:
     def num(v: str) -> float:
         try:
             return float(v)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             return math.nan
 
     with path.open(newline="") as f:

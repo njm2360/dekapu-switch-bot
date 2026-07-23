@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from vrc_autopilot.control.controller import (
     ControlTuning,
     face_controllers,

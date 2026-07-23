@@ -3,6 +3,8 @@
 フレーム単位の照準幾何(誤差計算)は guidance.py。
 """
 
+from __future__ import annotations
+
 import heapq
 import logging
 import math
